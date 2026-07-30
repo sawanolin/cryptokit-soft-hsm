@@ -52,3 +52,4 @@ coverage/
 # Release staging; checked-in dist/ SDK remains tracked
 /release/
 
+PUBLISHING.md

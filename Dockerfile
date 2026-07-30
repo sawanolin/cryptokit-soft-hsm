@@ -1,4 +1,4 @@
-ARG ALPINE_VERSION=3.23
+ARG ALPINE_VERSION=3.24
 
 # 使用 Docker Hub 官方 Alpine 镜像，并保留镜像内置的 Alpine 官方软件仓库。
 FROM alpine:${ALPINE_VERSION} AS alpine-base

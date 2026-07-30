@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-
 # CryptoKit SoftHSM
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](LICENSE)
@@ -121,6 +119,7 @@ docker compose down -v
 
 ## 端口与持久化
 
+
 | 项目     |          默认值 | 用途                                                 |
 | -------- | --------------: | ---------------------------------------------------- |
 | SDF TCP  |      `ip:18081` | Linux/Windows SDF SDK 调用                           |
@@ -157,13 +156,14 @@ SHA256SUMS
 
 ## 已实现接口概览
 
+
 | 分类         | 已实现                                               |
 | ------------ | ---------------------------------------------------- |
 | 设备与会话   | Open/Close Device、Open/Close Session、GetDeviceInfo |
 | 随机数       | GenerateRandom                                       |
 | SM3          | HashInit、HashUpdate、HashFinal                      |
 | SM2 外部运算 | 密钥生成、加解密、签名、验签                         |
-| RSA 运算     | 1024–2048 位密钥生成、内外部公私钥运算、IPK/EPK/ISK  |
+| RSA 运算     | 1024–2048 位密钥生成、内外部公私钥运算、IPK/EPK/ISK |
 | 内部密钥     | SM2/RSA 公钥导出、权限获取/释放和内部密码运算        |
 | 会话密钥     | SM2/RSA IPK/EPK/ISK、对称密钥包装/导入、DestroyKey   |
 | SM4          | ECB、CBC、CFB、OFB、CTR、CBC-MAC                     |
@@ -188,6 +188,7 @@ Web 管理端提供：
 - 备份、恢复、上传、下载和完全重置。
 
 权限边界：
+
 
 | 功能                         | 超级管理员 | 系统管理员 | 安全管理员 | 审计管理员 |
 | ---------------------------- | :--------: | :--------: | :--------: | :--------: |
@@ -311,4 +312,10 @@ Docker 镜像和 Windows SDK 也随附上述授权材料。上游来源、修改
 
 # cryptokit-soft-hsm
 
-> > > > > > > b333fba904ad83a8060f9b740b1cf0a6b8b60533
+>>>>>>> b333fba904ad83a8060f9b740b1cf0a6b8b60533
+>>>>>>>
+>>>>>>
+>>>>>
+>>>>
+>>>
+>>
