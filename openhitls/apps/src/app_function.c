@@ -1,0 +1,116 @@
+/*
+ * This file is part of the openHiTLS project.
+ *
+ * openHiTLS is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *
+ *     http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
+ */
+#include "app_function.h"
+#include <string.h>
+#include <stddef.h>
+#include <limits.h>
+#include "app_errno.h"
+#include "app_help.h"
+#include "app_print.h"
+#include "app_rand.h"
+#include "app_enc.h"
+#include "app_pkcs12.h"
+#include "app_x509.h"
+#include "app_list.h"
+#include "app_rsa.h"
+#include "app_dgst.h"
+#include "app_crl.h"
+#include "app_genrsa.h"
+#include "app_verify.h"
+#include "app_pkey.h"
+#include "app_genpkey.h"
+#include "app_req.h"
+#include "app_mac.h"
+#include "app_kdf.h"
+#include "app_keymgmt.h"
+#include "app_client.h"
+#include "app_server.h"
+#include "app_pkeyutl.h"
+#include "app_prime.h"
+#include "app_errdecode.h"
+#include "app_asn1parse.h"
+
+HITLS_CmdFunc g_cmdFunc[] = {
+    {"help",     FUNC_TYPE_GENERAL,   HITLS_HelpMain},
+    {"rand",     FUNC_TYPE_GENERAL,   HITLS_RandMain},
+    {"enc",      FUNC_TYPE_GENERAL,   HITLS_EncMain},
+    {"pkcs12",   FUNC_TYPE_GENERAL,   HITLS_PKCS12Main},
+    {"rsa",      FUNC_TYPE_GENERAL,   HITLS_RsaMain},
+    {"x509",     FUNC_TYPE_GENERAL,   HITLS_X509Main},
+    {"list",     FUNC_TYPE_GENERAL,   HITLS_ListMain},
+    {"dgst",     FUNC_TYPE_GENERAL,   HITLS_DgstMain},
+    {"crl",      FUNC_TYPE_GENERAL,   HITLS_CrlMain},
+    {"genrsa",   FUNC_TYPE_GENERAL,   HITLS_GenRSAMain},
+    {"verify",   FUNC_TYPE_GENERAL,   HITLS_VerifyMain},
+    {"pkey",     FUNC_TYPE_GENERAL,   HITLS_PkeyMain},
+    {"genpkey",  FUNC_TYPE_GENERAL,   HITLS_GenPkeyMain},
+    {"req",      FUNC_TYPE_GENERAL,   HITLS_ReqMain},
+    {"mac",      FUNC_TYPE_GENERAL,   HITLS_MacMain},
+    {"kdf",      FUNC_TYPE_GENERAL,   HITLS_KdfMain},
+    {"prime",    FUNC_TYPE_GENERAL,   HITLS_PrimeMain},
+    {"errdecode", FUNC_TYPE_GENERAL,  HITLS_ErrdecodeMain},
+#ifdef HITLS_APP_SM_MODE
+    {"keymgmt",  FUNC_TYPE_GENERAL,   HITLS_KeyMgmtMain},
+#endif
+    {"s_client", FUNC_TYPE_GENERAL,   HITLS_ClientMain},
+    {"s_server", FUNC_TYPE_GENERAL,   HITLS_ServerMain},
+    {"pkeyutl",  FUNC_TYPE_GENERAL,   HITLS_PkeyUtlMain},
+    {"asn1parse", FUNC_TYPE_GENERAL, HITLS_Asn1Main},
+    {NULL,      FUNC_TYPE_NONE, NULL}
+};
+static void AppGetFuncPrintfLen(int *maxLen)
+{
+    size_t len = 0;
+    for (size_t i = 0; g_cmdFunc[i].name != NULL; i++) {
+        len = (len > strlen(g_cmdFunc[i].name)) ? len : strlen(g_cmdFunc[i].name);
+    }
+    if (len > (size_t)(INT_MAX - 5)) {
+        *maxLen = INT_MAX;
+        return;
+    }
+    *maxLen = (int)(len + 5); // The relative maximum length is filled with 5 spaces.
+}
+
+void AppPrintFuncList(void)
+{
+    AppPrintError("function: HiTLS supports the following commands:\n");
+    int maxLen = 0;
+    AppGetFuncPrintfLen(&maxLen);
+    for (size_t i = 0; g_cmdFunc[i].name != NULL; i++) {
+        if (((i % 4) == 0) && (i != 0)) { // Print 4 functions in one line
+            AppPrintError("\n");
+        }
+        AppPrintError("%-*s", maxLen, g_cmdFunc[i].name);
+    }
+    AppPrintError("\n");
+}
+
+int AppGetProgFunc(const char *proName, HITLS_CmdFunc *func)
+{
+    for (size_t i = 0; g_cmdFunc[i].name != NULL; i++) {
+        if (strcmp(proName, g_cmdFunc[i].name) == 0) {
+            func->type = g_cmdFunc[i].type;
+            func->main = g_cmdFunc[i].main;
+            break;
+        }
+    }
+
+    if (func->main == NULL) {
+        AppPrintError("function: Can not find the function : %s. ", proName);
+        return HITLS_APP_OPT_NAME_INVALID;
+    }
+
+    return HITLS_APP_SUCCESS;
+}

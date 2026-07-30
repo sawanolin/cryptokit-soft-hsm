@@ -1,0 +1,35 @@
+# Transport Layer Configuration
+
+[transport]
+# TCP Mode Configuration
+# tcp_host = 127.0.0.1
+# tcp_port = 18081
+
+# Unix Domain Socket Mode Configuration
+unix_path = /tmp/sdfxd.sock
+unix_permissions = 0666
+
+# Daemon Configuration
+
+[daemon]
+# Number of worker threads
+worker_threads = 8
+
+# Maximum number of client connections
+max_clients = 100
+
+# Session timeout in seconds
+session_timeout = 300
+
+
+# Client Configuration
+
+[client]
+# Connection timeout in milliseconds
+connect_timeout = 5000
+
+# Request timeout in milliseconds
+request_timeout = 30000
+
+# Number of connection retries
+retry_count = 3

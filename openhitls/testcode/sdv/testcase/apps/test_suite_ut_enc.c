@@ -1,0 +1,345 @@
+/*
+ * This file is part of the openHiTLS project.
+ *
+ * openHiTLS is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *
+ *     http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
+ */
+
+/* BEGIN_HEADER */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stddef.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include "app_enc.h"
+#include "app_errno.h"
+#include "app_help.h"
+#include "app_print.h"
+#include "app_opt.h"
+#include "app_utils.h"
+#include "app_provider.h"
+#include "bsl_uio.h"
+#include "crypt_eal_cipher.h"
+#include "crypt_eal_kdf.h"
+#include "eal_cipher_local.h"
+#include "bsl_errno.h"
+
+/* INCLUDE_SOURCE  ${HITLS_ROOT_PATH}/apps/src/app_print.c ${HITLS_ROOT_PATH}/apps/src/app_enc.c ${HITLS_ROOT_PATH}/apps/src/app_opt.c ${HITLS_ROOT_PATH}/apps/src/app_utils.c */
+/* END_HEADER */
+
+typedef struct {
+    uint16_t version;
+
+} ResumeTestInfo;
+
+typedef struct {
+    int argc;
+    char **argv;
+    int expect;
+} OptTestData;
+
+static int32_t AppInit(void)
+{
+    int32_t ret = AppPrintErrorUioInit(stderr);
+    if (ret != HITLS_APP_SUCCESS) {
+        return ret;
+    }
+    if (APP_Create_LibCtx() == NULL) {
+        (void)AppPrintError("Create g_libCtx failed\n");
+        return HITLS_APP_INVALID_ARG;
+    }
+    return HITLS_APP_SUCCESS;
+}
+
+static void AppUninit(void)
+{
+    remove("../testdata/apps/enc/res_encfile");
+    remove("../testdata/apps/enc/res_decfile");
+    remove("res_tmpfile");
+    AppPrintErrorUioUnInit();
+    HITLS_APP_FreeLibCtx();
+}
+
+static int32_t CompareFile(const char *file1, const char *file2)
+{
+    FILE *fp1 = fopen(file1, "rb");
+    FILE *fp2 = fopen(file2, "rb");
+    if (fp1 == NULL || fp2 == NULL) {
+        if (fp1 != NULL) {
+            if (fclose(fp1) != 0) {
+                return HITLS_APP_UIO_FAIL;
+            }
+        }
+        if (fp2 != NULL) {
+            if (fclose(fp2) != 0) {
+                return HITLS_APP_UIO_FAIL;
+            }
+        }
+        return HITLS_APP_UIO_FAIL;
+    }
+    int result = HITLS_APP_SUCCESS;
+    char buf1[1024];
+    char buf2[1024];
+    size_t bytesRead1;
+    size_t bytesRead2;
+    do {
+        bytesRead1 = fread(buf1, 1, sizeof(buf1), fp1);
+        bytesRead2 = fread(buf2, 1, sizeof(buf2), fp2);
+        if (bytesRead1 != bytesRead2 || memcmp(buf1, buf2, bytesRead1) != 0) {
+            result = HITLS_APP_UIO_FAIL;
+            break;
+        }
+    } while (bytesRead1 > 0 && bytesRead2 > 0);
+    if (fclose(fp1) != 0) {
+        result = HITLS_APP_UIO_FAIL;
+    }
+    if (fclose(fp2) != 0) {
+        result = HITLS_APP_UIO_FAIL;
+    }
+    return result;
+}
+
+/**
+ * @test UT_HITLS_APP_ENC_TC001
+ * @spec  -
+ * @title  测试命令行二级命令enc正常场景
+ */
+
+/* BEGIN_CASE */
+void UT_HITLS_APP_ENC_TC001(void)
+{
+    char *argv[][13] = {
+        {"enc", "-enc", "-cipher", "aes128_cbc", "-in", "../testdata/apps/enc/test_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-enc", "-cipher", "aes128_cbc", "-in", "../testdata/apps/enc/test_encfile", "-pass", "file:../testdata/apps/pass/size_1024_pass", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-enc", "-cipher", "aes128_cbc", "-md", "sha1", "-in", "../testdata/apps/enc/test_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-enc", "-cipher", "aes128_cbc", "-in", "../testdata/apps/enc/test_encfile", "-pass", "file:../testdata/apps/enc/enter_pass_file", "-out", "../testdata/apps/enc/res_encfile"}
+    };
+
+    OptTestData testData[] = {
+        {10, argv[0], HITLS_APP_SUCCESS},
+        {10, argv[1], HITLS_APP_SUCCESS},
+        {12, argv[2], HITLS_APP_SUCCESS},
+        {10, argv[3], HITLS_APP_SUCCESS}
+    };
+
+    ASSERT_EQ(AppInit(), HITLS_APP_SUCCESS);
+    for (int i = 0; i < (int)(sizeof(testData) / sizeof(OptTestData)); ++i) {
+        int ret = HITLS_EncMain(testData[i].argc, testData[i].argv);
+        ASSERT_EQ(ret, testData[i].expect);
+    }
+    
+EXIT:
+    AppUninit();
+    return;
+}
+/* END_CASE */
+
+/**
+ * @test UT_HITLS_APP_ENC_TC002
+ * @spec  -
+ * @title  测试命令行二级命令enc不同对称加解密算法的加解密流程
+ */
+
+/* BEGIN_CASE */
+void UT_HITLS_APP_ENC_TC002(void)
+{
+    char *argv[][11] = {
+        {"enc", "-enc", "-cipher", "aes128_cbc", "-in", "../testdata/apps/enc/test_encfile", "-pass", "pass:12345678", "-out", "res_tmpfile"},
+        {"enc", "-dec", "-cipher", "aes128_cbc", "-in", "res_tmpfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_decfile"},
+        {"enc", "-enc", "-cipher", "aes128_ctr", "-in", "../testdata/apps/enc/test_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-dec", "-cipher", "aes128_ctr", "-in", "../testdata/apps/enc/res_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_decfile"},
+        {"enc", "-enc", "-cipher", "aes128_ecb", "-in", "../testdata/apps/enc/test_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-dec", "-cipher", "aes128_ecb", "-in", "../testdata/apps/enc/res_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_decfile"},
+        {"enc", "-enc", "-cipher", "aes128_xts", "-in", "../testdata/apps/enc/test_xts_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-dec", "-cipher", "aes128_xts", "-in", "../testdata/apps/enc/res_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_decfile"},
+        {"enc", "-enc", "-cipher", "aes128_gcm", "-in", "../testdata/apps/enc/test_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-dec", "-cipher", "aes128_gcm", "-in", "../testdata/apps/enc/res_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_decfile"},
+        {"enc", "-enc", "-cipher", "chacha20_poly1305", "-in", "../testdata/apps/enc/test_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-dec", "-cipher", "chacha20_poly1305", "-in", "../testdata/apps/enc/res_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_decfile"},
+        {"enc", "-enc", "-cipher", "sm4_cfb", "-in", "../testdata/apps/enc/test_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-dec", "-cipher", "sm4_cfb", "-in", "../testdata/apps/enc/res_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_decfile"}
+    };
+
+    OptTestData testData[] = {
+        {10, argv[0], HITLS_APP_SUCCESS},
+        {10, argv[1], HITLS_APP_SUCCESS},
+        {10, argv[2], HITLS_APP_SUCCESS},
+        {10, argv[3], HITLS_APP_SUCCESS},
+        {10, argv[4], HITLS_APP_SUCCESS},
+        {10, argv[5], HITLS_APP_SUCCESS},
+        {10, argv[6], HITLS_APP_SUCCESS},
+        {10, argv[7], HITLS_APP_SUCCESS},
+        {10, argv[8], HITLS_APP_OPT_VALUE_INVALID},
+        {10, argv[9], HITLS_APP_OPT_VALUE_INVALID},
+        {10, argv[10], HITLS_APP_OPT_VALUE_INVALID},
+        {10, argv[11], HITLS_APP_OPT_VALUE_INVALID},
+        {10, argv[12], HITLS_APP_SUCCESS},
+        {10, argv[13], HITLS_APP_SUCCESS}
+    };
+
+    ASSERT_EQ(AppInit(), HITLS_APP_SUCCESS);
+    for (int i = 0; i < (int)(sizeof(testData) / sizeof(OptTestData)); ++i) {
+        int ret = HITLS_EncMain(testData[i].argc, testData[i].argv);
+        ASSERT_EQ(ret, testData[i].expect);
+    }
+    
+EXIT:
+    AppUninit();
+    return;
+}
+/* END_CASE */
+
+/**
+ * @test UT_HITLS_APP_ENC_TC003
+ * @spec  -
+ * @title  测试命令行二级命令enc异常场景
+ */
+
+/* BEGIN_CASE */
+void UT_HITLS_APP_ENC_TC003(void)
+{
+    char *argv[][13] = {
+        {"enc", "-enc", "-cipher", "aes128_abc", "-in", "../testdata/apps/enc/test_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-enc", "-cipher", "aes128_cbc", "-in", "../testdata/apps/enc/test_encfile", "-pass", "file:../testdata/apps/pass/empty_pass", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-enc", "-cipher", "aes128_cbc", "-md", "md_abc", "-in", "../testdata/apps/enc/test_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-enc", "-cipher", "aes128_cbc", "-in", "../testdata/apps/enc/test_encfile", "-pass", "pass:", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-enc", "-cipher", "aes128_cbc", "-in", "../testdata/apps/enc/test_encfile", "-pass", "file:../testdata/apps/pass/size_1025_pass", "-out", "../testdata/apps/enc/res_encfile"},
+        {"enc", "-enc", "-cipher", "aes128-wrap-pad", "-in", "../testdata/apps/enc/test_encfile", "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_encfile"}
+    };
+
+    OptTestData testData[] = {
+        {10, argv[0], HITLS_APP_OPT_VALUE_INVALID},
+        {10, argv[1], HITLS_APP_PASSWD_FAIL},
+        {12, argv[2], HITLS_APP_OPT_VALUE_INVALID},
+        {10, argv[3], HITLS_APP_PASSWD_FAIL},
+        {10, argv[4], HITLS_APP_PASSWD_FAIL},
+        {10, argv[5], HITLS_APP_OPT_VALUE_INVALID}
+    };
+
+    ASSERT_EQ(AppInit(), HITLS_APP_SUCCESS);
+    for (int i = 0; i < (int)(sizeof(testData) / sizeof(OptTestData)); ++i) {
+        int ret = HITLS_EncMain(testData[i].argc, testData[i].argv);
+        ASSERT_EQ(ret, testData[i].expect);
+    }
+    
+EXIT:
+    AppUninit();
+    return;
+}
+/* END_CASE */
+
+/**
+ * @test UT_HITLS_APP_ENC_TC004
+ * @spec  -
+ * @title  Test enc named output file permission; expect 0600 even with permissive umask
+ */
+
+/* BEGIN_CASE */
+void UT_HITLS_APP_ENC_TC004(void)
+{
+    char outFile[] = "res_perm_tmpfile";
+    char *argv[] = {"enc", "-enc", "-cipher", "aes128_cbc", "-in", "../testdata/apps/enc/test_encfile",
+        "-pass", "pass:12345678", "-out", outFile};
+    struct stat st = {0};
+    mode_t oldMask = umask(0022);
+
+    ASSERT_EQ(AppInit(), HITLS_APP_SUCCESS);
+    (void)remove(outFile);
+
+    int ret = HITLS_EncMain(sizeof(argv) / sizeof(argv[0]), argv);
+    ASSERT_EQ(ret, HITLS_APP_SUCCESS);
+    ASSERT_EQ(stat(outFile, &st), 0);
+    ASSERT_EQ(st.st_mode & 0777, S_IRUSR | S_IWUSR);
+
+EXIT:
+    (void)umask(oldMask);
+    (void)remove(outFile);
+    AppUninit();
+    return;
+}
+/* END_CASE */
+
+/**
+ * @test UT_HITLS_APP_ENC_TC005
+ * @spec  -
+ * @title  Test stdin reads respect the caller supplied maximum size
+ */
+
+/* BEGIN_CASE */
+void UT_HITLS_APP_ENC_TC005(void)
+{
+    char inFile[] = "stdin_limit_tmpfile";
+    uint8_t *buf = NULL;
+    uint64_t bufLen = 0;
+    int stdinFd = -1;
+    FILE *fp = fopen(inFile, "wb");
+    ASSERT_NE(fp, NULL);
+    ASSERT_EQ(fwrite("12345", 1, 5, fp), 5);
+    ASSERT_EQ(fclose(fp), 0);
+    fp = NULL;
+
+    stdinFd = dup(STDIN_FILENO);
+    ASSERT_TRUE(stdinFd >= 0);
+    ASSERT_NE(freopen(inFile, "rb", stdin), NULL);
+    ASSERT_EQ(HITLS_APP_ReadFileOrStdin(&buf, &bufLen, NULL, 4, "enc"), HITLS_APP_UIO_FAIL);
+
+EXIT:
+    BSL_SAL_FREE(buf);
+    if (fp != NULL) {
+        (void)fclose(fp);
+    }
+    if (stdinFd >= 0) {
+        (void)dup2(stdinFd, STDIN_FILENO);
+        (void)close(stdinFd);
+        clearerr(stdin);
+    }
+    (void)remove(inFile);
+    return;
+}
+/* END_CASE */
+
+/**
+ * @test UT_HITLS_APP_ENC_TC006
+ * @spec  -
+ * @title  测试命令行二级命令enc的hex和base64输出
+ */
+
+/* BEGIN_CASE */
+void UT_HITLS_APP_ENC_TC006(void)
+{
+    /* Verify hex/base64 encode then decode round-trip. */
+    char *encHexArgv[] = {"enc", "-enc", "-cipher", "aes128_ecb", "-in", "../testdata/apps/enc/test_encfile",
+        "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_hex_encfile", "-hex"};
+    char *decHexArgv[] = {"enc", "-dec", "-cipher", "aes128_ecb", "-in", "../testdata/apps/enc/res_hex_encfile",
+        "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_hex_decfile", "-hex"};
+    char *encB64Argv[] = {"enc", "-enc", "-cipher", "aes128_ecb", "-in", "../testdata/apps/enc/test_encfile",
+        "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_b64_encfile", "-base64"};
+    char *decB64Argv[] = {"enc", "-dec", "-cipher", "aes128_ecb", "-in", "../testdata/apps/enc/res_b64_encfile",
+        "-pass", "pass:12345678", "-out", "../testdata/apps/enc/res_b64_decfile", "-base64"};
+
+    ASSERT_EQ(AppInit(), HITLS_APP_SUCCESS);
+
+    ASSERT_EQ(HITLS_EncMain((int)(sizeof(encHexArgv) / sizeof(encHexArgv[0])), encHexArgv), HITLS_APP_SUCCESS);
+    ASSERT_EQ(HITLS_EncMain((int)(sizeof(decHexArgv) / sizeof(decHexArgv[0])), decHexArgv), HITLS_APP_SUCCESS);
+    ASSERT_EQ(CompareFile("../testdata/apps/enc/test_encfile", "../testdata/apps/enc/res_hex_decfile"),
+        HITLS_APP_SUCCESS);
+
+    ASSERT_EQ(HITLS_EncMain((int)(sizeof(encB64Argv) / sizeof(encB64Argv[0])), encB64Argv), HITLS_APP_SUCCESS);
+    ASSERT_EQ(HITLS_EncMain((int)(sizeof(decB64Argv) / sizeof(decB64Argv[0])), decB64Argv), HITLS_APP_SUCCESS);
+    ASSERT_EQ(CompareFile("../testdata/apps/enc/test_encfile", "../testdata/apps/enc/res_b64_decfile"),
+        HITLS_APP_SUCCESS);
+
+EXIT:
+    AppUninit();
+    return;
+}
+/* END_CASE */

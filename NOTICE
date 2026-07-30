@@ -1,0 +1,39 @@
+CryptoKit SoftHSM
+Copyright (C) 2026 sawanolin and CryptoKit SoftHSM contributors.
+Source: https://github.com/sawanolin/cryptokit-soft-hsm
+
+This notice applies only to the original additions and modifications made for
+CryptoKit SoftHSM. It does not replace or supersede the copyright notices or
+licenses of upstream projects bundled in this distribution.
+
+CryptoKit SoftHSM original additions and modifications are made available
+under the GNU Affero General Public License, Version 3 only
+(SPDX-License-Identifier: AGPL-3.0-only). See LICENSE. Users interacting with
+the software over a network can obtain the corresponding source from the
+source URL above.
+
+This distribution includes and modifies SDFX:
+  Project: SDFX - Software Cryptographic Device Framework
+  Upstream: https://gitcode.com/openHiTLS/sdfx
+  Original license: Mulan PSL v2
+  Bundled license: sdfx/LICENSE
+
+This distribution includes openHiTLS:
+  Project: openHiTLS
+  Upstream: https://gitcode.com/openhitls/openhitls
+  Website: https://openhitls.net
+  Original license: Mulan PSL v2
+  Bundled license: openhitls/LICENSE
+  Third-party notice:
+    openhitls/Third_Party_Open_Source_Software_Notice
+
+The original SDFX and openHiTLS material remains subject to its existing
+license and notices. Inclusion in this distribution does not claim ownership
+of, or remove the permissions and notices applicable to, upstream material.
+
+The names, trademarks, service marks, and product names of upstream
+contributors are used only for attribution. No sponsorship, endorsement, or
+trademark license is implied.
+
+See THIRD_PARTY_NOTICES.md for component details, modification disclosures,
+binary-distribution locations, and source-provenance notes.

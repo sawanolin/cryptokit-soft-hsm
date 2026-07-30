@@ -1,0 +1,217 @@
+# CryptoKit SoftHSM
+
+Docker Hub 短描述（可直接粘贴，少于 100 字符）：
+
+> GM/T 0018-2023 SDF 软件密码设备模拟器，内置 Web 管理与 Windows x64 SDK
+
+CryptoKit SoftHSM 是一套基于 SDFX 和 openHiTLS 的软件密码设备模拟器。
+单个镜像同时运行：
+
+- `sdfxd` SDF TCP 服务；
+- openHiTLS 密码运算库；
+- Web 管理后端和前端；
+- supervisord 进程管理与健康检查。
+
+> 用于学习、开发、教学、接口调试和密码应用测试。它不是经过商用密码
+> 检测认证的硬件服务器密码机，不应直接用于生产密钥托管或合规场景。
+
+## 快速启动
+
+镜像仓库为 `sawanolin/cryptokit-soft-hsm`：
+
+```bash
+docker pull sawanolin/cryptokit-soft-hsm:1.0.0
+
+docker run -d \
+  --name cryptokit-soft-hsm \
+  -p 0.0.0.0:18081:18081 \
+  -p 0.0.0.0:18080:18080 \
+  -v cryptokit-sdfx-data:/var/lib/sdfx \
+  --restart unless-stopped \
+  --security-opt no-new-privileges:true \
+  sawanolin/cryptokit-soft-hsm:1.0.0
+```
+
+打开：
+
+```text
+http://ip:18080
+```
+
+首次进入只创建超级管理员、设备信息和设备完整性密钥，不生成业务密钥。超级管理员再创建系统、安全、审计管理员，业务密钥由安全管理员配置。镜像没有默认管理员密码。
+
+## Docker Compose
+
+```yaml
+services:
+  softhsm:
+    image: sawanolin/cryptokit-soft-hsm:1.0.0
+    ports:
+      - "0.0.0.0:18081:18081"
+      - "0.0.0.0:18080:18080"
+    volumes:
+      - sdfx-data:/var/lib/sdfx
+    restart: unless-stopped
+    stop_grace_period: 15s
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  sdfx-data:
+```
+
+启动：
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+## 标签与平台
+
+
+| 标签     | 含义                           |
+| -------- | ------------------------------ |
+| `1.0.0`  | 固定版本，部署时推荐           |
+| `latest` | 最新稳定版本，可能随新版本移动 |
+
+当前已经实际构建和验证的平台为：
+
+```text
+linux/amd64
+```
+
+在发布者明确提供并测试其他架构标签前，不应假定支持 `linux/arm64`。
+
+## 端口和数据卷
+
+
+| 容器资源        | 用途                                            |
+| --------------- | ----------------------------------------------- |
+| `18081/tcp`     | SDF SDK TCP 通道                                |
+| `18080/tcp`     | Web 管理端                                      |
+| `/var/lib/sdfx` | 设备、账号、密钥、对称密钥、用户文件、Web 状态、审计和备份 |
+
+业务 TCP 通道当前没有 TLS 或双向认证，Web 管理端默认也是 HTTP；不要直接暴露到公网。
+
+## 主要功能
+
+- GM/T 0018-2023 风格的设备、会话和设备信息接口；
+- openHiTLS 随机数、SM3、SM2 与 SM4；
+- SM2/RSA 外部运算和持久化内部签名/加密密钥；
+- 会话级私钥访问权限；
+- SM2/RSA 和对称密钥（SDF KEK）会话密钥封装；
+- SM4 ECB/CBC/CFB/OFB/CTR 和 CBC-MAC；
+- SDF 用户文件；
+- Web 四角色权限、设备、SM2/RSA/对称密钥、会话和审计管理；
+- Web 随机数、SM3、SM4、SM2、RSA 在线自检；
+- 备份、恢复、上传、下载和完全重置。
+
+ECC 协商、认证加密、流式对称/MAC/HMAC、SM9 和 VPN 扩展等尚未
+实现的接口会明确返回 `SDR_NOTSUPPORT`。
+
+## Web 角色和密钥保护
+
+- 超级管理员：首次初始化与管理员管理；
+- 系统管理员：设备、会话和备份恢复；
+- 安全管理员：密码自检及 SM2/RSA/对称密钥；
+- 审计管理员：日志配置、查询和 TXT 导出。
+
+SM2/RSA 签名与加密密钥索引独立，可以在 Web 中修改。私钥访问控制码可以留空；留空表示应用调用时不要求口令，不表示私钥明文保存。所有持久化非对称密钥记录连同索引使用 HMAC-SM3 完整性保护，密钥来自首次初始化自动生成且不可通过 Web 修改或导出的设备完整性密钥。
+
+## 健康检查与日志
+
+镜像健康检查同时验证 18081 TCP 服务和 Web `/api/health`：
+
+```bash
+docker inspect \
+  --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' \
+  cryptokit-soft-hsm
+
+docker logs --tail 100 cryptokit-soft-hsm
+```
+
+健康状态应变为：
+
+```text
+healthy
+```
+
+运行日志包含时间、级别、模块、进程/线程、请求来源、SDF 命令号、会话号、返回码和耗时，不记录密码、密钥或请求载荷。Web 审计可导出 UTF-8 TXT。
+
+## 数据管理
+
+命名卷会保留管理员账号和密码摘要。重建容器时重新挂载同一个卷会继续使用上次账号；需要全新初始化时必须改用新的空卷。
+
+停止或更新容器不会删除命名卷：
+
+```bash
+docker stop cryptokit-soft-hsm
+docker rm cryptokit-soft-hsm
+```
+
+重新创建容器并挂载同一个 `cryptokit-sdfx-data` 卷即可恢复设备状态。
+
+删除该卷会永久清除设备数据：
+
+```bash
+docker volume rm cryptokit-sdfx-data
+```
+
+执行前应先通过 Web 创建并下载备份。备份包会进行路径、条目类型、
+校验和和大小检查，但未额外做整包口令加密，应保存在受控或加密存储。
+
+## 更新版本
+
+建议固定版本标签，并在更新前备份：
+
+```bash
+docker pull sawanolin/cryptokit-soft-hsm:1.0.0
+docker stop cryptokit-soft-hsm
+docker rm cryptokit-soft-hsm
+```
+
+然后使用相同的端口和数据卷重新执行启动命令。不要把生产部署只绑定到
+会移动的 `latest` 标签。
+
+## Windows x64 SDK
+
+Windows 客户端通过 `sdfapi_x64.dll` 调用 18081 TCP 服务。SDK 包含：
+
+- `sdfapi_x64.dll`；
+- `sdfapi_x64.lib`；
+- `sdf.h` 等公开头文件；
+- `sdfapi.ini`；
+- C 示例和校验和。
+
+请从对应版本的 GitHub Release 下载：
+
+```text
+https://github.com/sawanolin/cryptokit-soft-hsm/releases
+```
+
+## 安全说明
+
+- 不要在环境变量、Compose 文件或镜像层中写入管理员口令；
+- 管理令牌在每次容器启动时随机生成，不进入镜像或持久卷；
+- 对称密钥、内部私钥和会话密钥不通过管理 API 返回明文；
+- Web 端应置于 HTTPS 反向代理之后；
+- 18081 端口应限制在本机或可信网络；
+- 本镜像不具备硬件防拆、认证边界或商用密码产品认证。
+
+## 源码、文档与许可证
+
+源码：
+
+```text
+https://github.com/sawanolin/cryptokit-soft-hsm
+```
+
+完整 API 实现矩阵、Windows SDK、Web 管理说明、构建方法和第三方声明均
+在源码仓库中。CryptoKit SoftHSM 原创代码与修改采用 GNU AGPL v3.0 only
+（`AGPL-3.0-only`）。修改镜像并通过网络提供服务时，必须向用户提供对应
+源码；Web 侧栏含固定的源码和许可证入口。SDFX/openHiTLS 原始材料继续
+适用其 Mulan PSL v2 等既有许可证。源码仓库、Docker 镜像和 Windows SDK
+均随附 LICENSE、NOTICE、上游许可证和第三方声明。
+
+

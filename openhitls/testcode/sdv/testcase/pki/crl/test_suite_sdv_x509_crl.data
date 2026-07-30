@@ -1,0 +1,668 @@
+SDV_X509_CRL_PARSE_FUNC_TC001 parse pem time optional crl
+SDV_X509_CRL_PARSE_FUNC_TC001:BSL_FORMAT_PEM:"../testdata/cert/pem/crl/time.optional.pem"
+
+SDV_X509_CRL_PARSE_FUNC_TC001 parse pem crl
+SDV_X509_CRL_PARSE_FUNC_TC001:BSL_FORMAT_PEM:"../testdata/cert/pem/crl/crl_v2.pem"
+
+SDV_X509_CRL_PARSE_FUNC_TC001 parse unknown(pem) crl
+SDV_X509_CRL_PARSE_FUNC_TC001:BSL_FORMAT_UNKNOWN:"../testdata/cert/pem/crl/crl_v2.pem"
+
+SDV_X509_CRL_PARSE_FUNC_TC001 parse unknown(asn1) crl
+SDV_X509_CRL_PARSE_FUNC_TC001:BSL_FORMAT_UNKNOWN:"../testdata/cert/asn1/ca-empty-rsa-sha256-v2.der"
+
+SDV_X509_CRL_PARSE_FUNC_TC001
+SDV_X509_CRL_PARSE_FUNC_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/ca-empty-rsa-sha256-v2.der"
+
+SDV_X509_CRL_PARSE_FUNC_TC001
+SDV_X509_CRL_PARSE_FUNC_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/ca-1-rsa-sha256-v2.der"
+
+SDV_X509_CRL_PARSE_FUNC_TC001
+SDV_X509_CRL_PARSE_FUNC_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/ca-1-rsa-sha256-v1.der"
+
+SDV_X509_CRL_PARSE_FUNC_TC001 revokelist ext
+SDV_X509_CRL_PARSE_FUNC_TC001:BSL_FORMAT_UNKNOWN:"../testdata/cert/pem/crl/crl_v2.mul3.crl"
+
+SDV_X509_CRL_CTRL_FUNC_TC001
+SDV_X509_CRL_CTRL_FUNC_TC001:"../testdata/cert/asn1/ca-1-rsa-sha256-v2.der"
+
+SDV_X509_CRL_CTRL_FUNC_TC001
+SDV_X509_CRL_CTRL_FUNC_TC001:"../testdata/cert/asn1/ca-1-rsa-sha256-v1.der"
+
+SDV_X509_CRL_PARSE_VERSION_FUNC_TC001
+SDV_X509_CRL_PARSE_VERSION_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v1.der":0
+
+SDV_X509_CRL_PARSE_VERSION_FUNC_TC001
+SDV_X509_CRL_PARSE_VERSION_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.der":1
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001: edd25519 crl
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/ed25519/ed25519.crl.der":BSL_CID_ED25519:0:0:0
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v1.der":BSL_CID_DSAWITHSHA256:0:0:0
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.der":BSL_CID_DSAWITHSHA256:0:0:0
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/ecdsa_crl/crl_v1.der":BSL_CID_ECDSAWITHSHA256:0:0:0
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/ecdsa_crl/crl_v2.der":BSL_CID_ECDSAWITHSHA256:0:0:0
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_crl/crl_v1.der":BSL_CID_SHA256WITHRSAENCRYPTION:0:0:0
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_crl/crl_v2.der":BSL_CID_SHA256WITHRSAENCRYPTION:0:0:0
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_ecc_crl/crl_v1.der":BSL_CID_ECDSAWITHSHA256:0:0:0
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_ecc_crl/crl_v2.der":BSL_CID_ECDSAWITHSHA256:0:0:0
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_pss_crl/pss_v1.der":BSL_CID_RSASSAPSS:BSL_CID_SHA256:BSL_CID_SHA256:32
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_pss_crl/pss_v2.der":BSL_CID_RSASSAPSS:BSL_CID_SHA256:BSL_CID_SHA256:32
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_pss_crl/crl_v1.der":BSL_CID_SHA256WITHRSAENCRYPTION:0:0:0
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_pss_crl/crl_v2.der":BSL_CID_SHA256WITHRSAENCRYPTION:0:0:0
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/sm2_crl/crl_v1.der":BSL_CID_SM2DSAWITHSM3:0:0:0
+
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_TBS_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/sm2_crl/crl_v2.der":BSL_CID_SM2DSAWITHSM3:0:0:0
+
+SDV_X509_CRL_PARSE_ISSUERNAME_FUNC_TC001
+SDV_X509_CRL_PARSE_ISSUERNAME_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v1.der":10:"550406":19:"5858":"550408":12:"5858":"55040a":12:"6365727469666963617465":"55040b":12:"74657374696E":"550403":12:"63657274696669636174652E74657374696E2E636F6D"
+
+SDV_X509_CRL_PARSE_ISSUERNAME_FUNC_TC001
+SDV_X509_CRL_PARSE_ISSUERNAME_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.der":10:"550406":19:"5858":"550408":12:"5858":"55040a":12:"6365727469666963617465":"55040b":12:"74657374696E":"550403":12:"63657274696669636174652E74657374696E2E636F6D"
+
+SDV_X509_CRL_PARSE_TIME_FUNC_TC001
+SDV_X509_CRL_PARSE_TIME_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.v1-time.der"
+
+SDV_X509_CRL_PARSE_TIME_FUNC_TC001 no time
+SDV_X509_CRL_PARSE_TIME_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.v1-no-time.der"
+
+SDV_X509_CRL_ENTRY_TIME_CHOICE_TAG_FUNC_TC001
+SDV_X509_CRL_ENTRY_TIME_CHOICE_TAG_FUNC_TC001:
+
+SDV_X509_CRL_PARSE_START_TIME_FUNC_TC001
+SDV_X509_CRL_PARSE_START_TIME_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v1.der":2024:4:23:3:12:2
+
+SDV_X509_CRL_PARSE_START_TIME_FUNC_TC001
+SDV_X509_CRL_PARSE_START_TIME_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.der":2024:4:23:3:12:2
+
+SDV_X509_CRL_PARSE_END_TIME_FUNC_TC001
+SDV_X509_CRL_PARSE_END_TIME_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v1.der":2034:4:21:3:12:2
+
+SDV_X509_CRL_PARSE_END_TIME_FUNC_TC001
+SDV_X509_CRL_PARSE_END_TIME_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.der":2034:4:21:3:12:2
+
+SDV_X509_CRL_PARSE_EXTENSIONS_FUNC_TC001
+SDV_X509_CRL_PARSE_EXTENSIONS_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.der":6:"551D14":4:"020101"
+
+SDV_X509_CRL_PARSE_EXTENSIONS_FUNC_TC001
+SDV_X509_CRL_PARSE_EXTENSIONS_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.mul.der":6:"551D14":4:"020101"
+
+SDV_X509_CRL_PARSE_EXTENSIONS_FUNC_TC001
+SDV_X509_CRL_PARSE_EXTENSIONS_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.mul2.der":6:"551D14":4:"020102"
+
+SDV_X509_CRL_PARSE_EXTENSIONS_FUNC_TC001
+SDV_X509_CRL_PARSE_EXTENSIONS_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.mul3.der":6:"551D14":4:"020103"
+
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC001
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.old"
+
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003:"../testdata/cert/asn1/dsa_crl/crl_v1.der":1:1:2:"02":2024:4:23:3:12:2
+
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003:"../testdata/cert/asn1/dsa_crl/crl_v2.der":1:1:2:"02":2024:4:23:3:12:2
+
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003:"../testdata/cert/asn1/dsa_crl/crl_v1.mul.der":3:1:2:"02":2024:4:23:3:12:2
+
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003:"../testdata/cert/asn1/dsa_crl/crl_v1.mul.der":3:2:2:"03":2024:4:23:3:12:2
+
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003:"../testdata/cert/asn1/dsa_crl/crl_v1.mul.der":3:3:2:"04":2024:4:23:3:12:2
+
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003:"../testdata/cert/asn1/dsa_crl/crl_v2.mul3.der":3:1:2:"02":2024:4:23:3:12:2
+
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003:"../testdata/cert/asn1/dsa_crl/crl_v2.mul3.der":3:2:2:"03":2024:4:23:3:12:2
+
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003:"../testdata/cert/asn1/dsa_crl/crl_v2.mul3.der":3:3:2:"04":2024:4:23:3:12:2
+
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003
+SDV_X509_CRL_PARSE_REVOKED_FUNC_TC003:"../testdata/cert/x25519/x25519.crl.der":1:1:2:"1001":2025:1:1:0:0:0
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v1.der":BSL_CID_DSAWITHSHA256:0:0:0
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.der":BSL_CID_DSAWITHSHA256:0:0:0
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/ecdsa_crl/crl_v1.der":BSL_CID_ECDSAWITHSHA256:0:0:0
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/ecdsa_crl/crl_v2.der":BSL_CID_ECDSAWITHSHA256:0:0:0
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_crl/crl_v1.der":BSL_CID_SHA256WITHRSAENCRYPTION:0:0:0
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_crl/crl_v2.der":BSL_CID_SHA256WITHRSAENCRYPTION:0:0:0
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_ecc_crl/crl_v1.der":BSL_CID_ECDSAWITHSHA256:0:0:0
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_ecc_crl/crl_v2.der":BSL_CID_ECDSAWITHSHA256:0:0:0
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_pss_crl/pss_v1.der":BSL_CID_RSASSAPSS:BSL_CID_SHA256:BSL_CID_SHA256:32
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_pss_crl/pss_v2.der":BSL_CID_RSASSAPSS:BSL_CID_SHA256:BSL_CID_SHA256:32
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_pss_crl/crl_v1.der":BSL_CID_SHA256WITHRSAENCRYPTION:0:0:0
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/rsa_pss_crl/crl_v2.der":BSL_CID_SHA256WITHRSAENCRYPTION:0:0:0
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/sm2_crl/crl_v1.der":BSL_CID_SM2DSAWITHSM3:0:0:0
+
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNALG_FUNC_TC001:"../testdata/cert/asn1/sm2_crl/crl_v2.der":BSL_CID_SM2DSAWITHSM3:0:0:0
+
+SDV_X509_CRL_PARSE_SIGNATURE_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNATURE_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v1.der":"303C021C1A001CEE9B883B690F2C9E2FA924245A69EDC00B93BE5B87C896F07B021C705F9539541833ED8C275FA05DEE66BAF5BA0187C8F086E1E527CFB1":0
+
+SDV_X509_CRL_PARSE_SIGNATURE_FUNC_TC001
+SDV_X509_CRL_PARSE_SIGNATURE_FUNC_TC001:"../testdata/cert/asn1/dsa_crl/crl_v2.der":"303C021C6B1DD2654D01044087FC459909362569913044323D2F34FE6AFE6631021C0DEAB0A4E517BDF50BE586159DB2B4A5B122B5F81679A9DDBC81C192":0
+
+SDV_X509_MUL_CRL_PARSE_FUNC_TC001 with 3 pem crls 
+SDV_X509_MUL_CRL_PARSE_FUNC_TC001:BSL_FORMAT_PEM:"../testdata/cert/asn1/ecdsa_crl/mulcrls.pem":3
+
+SDV_X509_MUL_CRL_PARSE_FUNC_TC001 with 3 der crls
+SDV_X509_MUL_CRL_PARSE_FUNC_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/ecdsa_crl/mulcrls.der":3
+
+SDV_X509_MUL_CRL_PARSE_FUNC_TC001 with 3 unknown(pem) crls
+SDV_X509_MUL_CRL_PARSE_FUNC_TC001:BSL_FORMAT_UNKNOWN:"../testdata/cert/asn1/ecdsa_crl/mulcrls.pem":3
+
+SDV_X509_MUL_CRL_PARSE_FUNC_TC001 with 3 unknown(der) crls
+SDV_X509_MUL_CRL_PARSE_FUNC_TC001:BSL_FORMAT_UNKNOWN:"../testdata/cert/asn1/ecdsa_crl/mulcrls.der":3
+
+SDV_X509_MUL_CRL_PARSE_FUNC_TC001 with 3 unknown(der) crls (with redundant symbols)
+SDV_X509_MUL_CRL_PARSE_FUNC_TC001:BSL_FORMAT_UNKNOWN:"../testdata/cert/asn1/ecdsa_crl/mulcrls-red.pem":3
+
+SDV_X509_CRL_Encode_TC001 rsa crl(der) with revokelist
+SDV_X509_CRL_Encode_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/rsa_crl/crl_v2.v1.der"
+
+SDV_X509_CRL_Encode_TC001 rsa crl(der) without revokelist
+SDV_X509_CRL_Encode_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/rsa_crl/crl_v2.v1.old.der"
+
+SDV_X509_CRL_Encode_TC001 ecc crl(der)
+SDV_X509_CRL_Encode_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/rsa_ecc_crl/crl_v2.v1.der"
+
+SDV_X509_CRL_Encode_TC001 sm2 crl(der)
+SDV_X509_CRL_Encode_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/sm2_crl/crl_v2.v1.der"
+
+SDV_X509_CRL_Encode_TC001 rsa-pss crl(der)
+SDV_X509_CRL_Encode_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/rsa_pss_crl/pss_v2.der"
+
+SDV_X509_CRL_Encode_TC001 rsa-pss crl-v1(der)
+SDV_X509_CRL_Encode_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/rsa_pss_crl/pss_v1.der"
+
+SDV_X509_CRL_Encode_TC001 sm2 crl(pem)
+SDV_X509_CRL_Encode_TC001:BSL_FORMAT_PEM:"../testdata/cert/pem/crl/crl_v2.pem"
+
+SDV_X509_CRL_EncodeParam_TC001
+SDV_X509_CRL_EncodeParam_TC001:
+
+SDV_X509_CRL_EncodeFile_TC001 ed25519 crl(der)
+SDV_X509_CRL_EncodeFile_TC001:BSL_FORMAT_ASN1:"../testdata/cert/ed25519/ed25519.crl.der"
+
+SDV_X509_CRL_EncodeFile_TC001 ed25519 crl(pem)
+SDV_X509_CRL_EncodeFile_TC001:BSL_FORMAT_PEM:"../testdata/cert/ed25519/ed25519.crl.pem"
+
+SDV_X509_CRL_EncodeFile_TC001 sm2 crl(der)
+SDV_X509_CRL_EncodeFile_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/sm2_crl/crl_v2.v1.der"
+
+SDV_X509_CRL_EncodeFile_TC001 sm2 crl(pem)
+SDV_X509_CRL_EncodeFile_TC001:BSL_FORMAT_PEM:"../testdata/cert/pem/crl/crl_v2.pem"
+
+SDV_X509_CRL_Check_TC001 success rsa
+SDV_X509_CRL_Check_TC001:"../testdata/cert/chain/rsa-v3/inter.der":"../testdata/cert/chain/rsa-v3/crl_v1.der":HITLS_PKI_SUCCESS
+
+SDV_X509_CRL_Check_TC001 success ecdsa
+SDV_X509_CRL_Check_TC001:"../testdata/cert/chain/ecdsa-v3/inter.der":"../testdata/cert/chain/ecdsa-v3/crl_v2.old.der":HITLS_PKI_SUCCESS
+
+SDV_X509_CRL_Check_TC001 success rsa-pss
+SDV_X509_CRL_Check_TC001:"../testdata/cert/chain/rsa-pss-v3/rootca.crt":"../testdata/cert/chain/rsa-pss-v3/crl.der":HITLS_PKI_SUCCESS
+
+SDV_X509_CRL_Check_TC001 inner/outer rsa-pss param mismatch
+SDV_X509_CRL_Check_TC001:"../testdata/cert/chain/sigParam/rsa_crl_inner_outer_mismatch_root.pem":"../testdata/cert/chain/sigParam/rsa_crl_inner_outer_mismatch.crl":HITLS_X509_ERR_VFY_SIGNALG_NOT_MATCH
+
+SDV_X509_CRL_Check_TC001 success sm2
+SDV_X509_CRL_Check_TC001:"../testdata/cert/sm2/inter.mul.der":"../testdata/cert/sm2/crl_v2.mul.der":HITLS_PKI_SUCCESS
+
+SDV_X509_CRL_CTRL_ParamCheck_TC001
+SDV_X509_CRL_CTRL_ParamCheck_TC001:
+
+SDV_X509_CRL_PARSE_REVOKEDLIST_FUNC_TC001
+SDV_X509_CRL_PARSE_REVOKEDLIST_FUNC_TC001:"../testdata/cert/pem/crl/crl_v2.mul3.crl":3
+
+SDV_X509_CRL_PARSE_REVOKEDLIST_FUNC_TC001
+SDV_X509_CRL_PARSE_REVOKEDLIST_FUNC_TC001:"../testdata/cert/x25519/x25519.crl.pem":1
+
+SDV_X509_CRL_CTRL_RevokedParamCheck_TC001
+SDV_X509_CRL_CTRL_RevokedParamCheck_TC001:
+
+SDV_X509_CRL_CTRL_GetFunc_TC001
+SDV_X509_CRL_CTRL_GetFunc_TC001:
+
+SDV_X509_CRL_ExtCtrl_FuncTest_TC001
+SDV_X509_CRL_ExtCtrl_FuncTest_TC001:
+
+SDV_X509_CRL_PARSE_IDP_DER_BOUNDARY_TC001 empty IDP DER
+SDV_X509_CRL_PARSE_IDP_DER_BOUNDARY_TC001:
+
+SDV_X509_CRL_PARSE_IDP_DER_BOUNDARY_TC002 multiple onlyContains fields DER
+SDV_X509_CRL_PARSE_IDP_DER_BOUNDARY_TC002:
+
+SDV_X509_CRL_PARSE_IDP_DER_BOUNDARY_TC003 unsupported reason bits DER
+SDV_X509_CRL_PARSE_IDP_DER_BOUNDARY_TC003:
+
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC001 fullName URI critical
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC001:"../testdata/cert/test_for_crl/ext_idp/fullname_uri.der"
+
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC002 fullName directoryName critical
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC002:"../testdata/cert/test_for_crl/ext_idp/fullname_dir.der"
+
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC003 relativeName critical
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC003:"../testdata/cert/test_for_crl/ext_idp/relativename.der"
+
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC004 onlyContainsUserCerts critical
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC004:"../testdata/cert/test_for_crl/ext_idp/onlyuser.der"
+
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC005 onlyContainsCACerts + indirectCRL + onlySomeReasons critical
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC005:"../testdata/cert/test_for_crl/ext_idp/onlyca_indirect_reasons.der"
+
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC006 empty IDP
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC006:"../testdata/cert/test_for_crl/ext_idp/raw_empty.der"
+
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC007 multiple onlyContains fields
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC007:"../testdata/cert/test_for_crl/ext_idp/raw_multi_only.der"
+
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC008 onlySomeReasons present but empty mask
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC008:"../testdata/cert/test_for_crl/ext_idp/raw_reason_zero.der"
+
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC009 onlySomeReasons contains unsupported bit
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC009:"../testdata/cert/test_for_crl/ext_idp/raw_reason_unknown.der"
+
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC009 onlySomeReasons contains only UNUSED bit
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC009:"../testdata/cert/test_for_crl/ext_idp/raw_reason_unused.der"
+
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC010 explicit FALSE bool
+SDV_X509_CRL_PARSE_IDP_THIRDPARTY_FUNC_TC010:"../testdata/cert/test_for_crl/ext_idp/raw_bool_false.der"
+
+SDV_X509_CRL_IDP_THIRDPARTY_ROUNDTRIP_TC001 fullname URI critical
+SDV_X509_CRL_IDP_THIRDPARTY_ROUNDTRIP_TC001:"../testdata/cert/test_for_crl/ext_idp/fullname_uri.der"
+
+SDV_X509_CRL_IDP_THIRDPARTY_ROUNDTRIP_TC001 fullname directoryName critical
+SDV_X509_CRL_IDP_THIRDPARTY_ROUNDTRIP_TC001:"../testdata/cert/test_for_crl/ext_idp/fullname_dir.der"
+
+SDV_X509_CRL_IDP_THIRDPARTY_ROUNDTRIP_TC001 relativeName critical
+SDV_X509_CRL_IDP_THIRDPARTY_ROUNDTRIP_TC001:"../testdata/cert/test_for_crl/ext_idp/relativename.der"
+
+SDV_X509_CRL_IDP_THIRDPARTY_ROUNDTRIP_TC001 onlyContainsUserCerts critical
+SDV_X509_CRL_IDP_THIRDPARTY_ROUNDTRIP_TC001:"../testdata/cert/test_for_crl/ext_idp/onlyuser.der"
+
+SDV_X509_CRL_IDP_THIRDPARTY_ROUNDTRIP_TC001 onlyContainsCACerts + indirectCRL + onlySomeReasons critical
+SDV_X509_CRL_IDP_THIRDPARTY_ROUNDTRIP_TC001:"../testdata/cert/test_for_crl/ext_idp/onlyca_indirect_reasons.der"
+
+SDV_X509_CRL_IDP_DELTA_EXACT_ROUNDTRIP_TC001 IDP + Delta CRL Indicator exact roundtrip
+SDV_X509_CRL_IDP_DELTA_EXACT_ROUNDTRIP_TC001:"../testdata/cert/test_for_crl/ext_idp/idp_delta.der"
+
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC001 IDP extnValue not SEQUENCE
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC001:"../testdata/cert/test_for_crl/ext_idp/bad_not_sequence.der"
+
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC002 IDP SEQUENCE has trailing data
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC002:"../testdata/cert/test_for_crl/ext_idp/bad_sequence_trailing.der"
+
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC003 implicit BOOLEAN length invalid
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC003:"../testdata/cert/test_for_crl/ext_idp/bad_bool_len.der"
+
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC004 onlySomeReasons empty content
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC004:"../testdata/cert/test_for_crl/ext_idp/bad_reason_empty.der"
+
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC005 distributionPoint wrapper empty
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC005:"../testdata/cert/test_for_crl/ext_idp/bad_dist_empty.der"
+
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC006 distributionPoint choice tag invalid
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC006:"../testdata/cert/test_for_crl/ext_idp/bad_dist_choice_tag.der"
+
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC007 distributionPoint choice has trailing data
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC007:"../testdata/cert/test_for_crl/ext_idp/bad_dist_trailing.der"
+
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC008 relativeName DER invalid
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC008:"../testdata/cert/test_for_crl/ext_idp/bad_relative_der.der"
+
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC009 relativeName only layer-1 node
+SDV_X509_CRL_PARSE_IDP_ABNORMAL_TC009:"../testdata/cert/test_for_crl/ext_idp/empty_relativename.der"
+
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC001 fullName URI roundtrip
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC001:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:"gen_idp_fullname_uri.der"
+
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC002 fullName directoryName roundtrip
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC002:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:"gen_idp_fullname_dir.der"
+
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC003 relativeName roundtrip
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC003:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:"gen_idp_relativename.der"
+
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC004 onlyContainsUserCerts roundtrip
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC004:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:"gen_idp_onlyuser.der"
+
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC005 onlyContainsCACerts indirectCRL reasons roundtrip
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC005:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:"gen_idp_scope_reasons.der"
+
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC006 indirectCRL only roundtrip
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC006:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:"gen_idp_indirect.der"
+
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC007 onlyContainsAttributeCerts roundtrip
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC007:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:"gen_idp_onlyattr.der"
+
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC008 empty onlySomeReasons roundtrip
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC008:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:"gen_idp_reason_zero.der"
+
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC009 all supported reason flags roundtrip
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC009:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:"gen_idp_reason_all.der"
+
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC010 duplicate set IDP overwrite
+SDV_X509_CRL_GEN_IDP_ROUNDTRIP_TC010:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:"gen_idp_overwrite.der"
+
+SDV_X509_CRL_GEN_IDP_DELTA_ROUNDTRIP_TC001 generate CRL with both IDP and Delta CRL Indicator
+SDV_X509_CRL_GEN_IDP_DELTA_ROUNDTRIP_TC001:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:"gen_idp_delta_roundtrip.der"
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC001 distPoint NONE with non-null name
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC001:
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC002 fullName name is NULL
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC002:
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC003 fullName name is empty list
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC003:
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC004 fullName receives relativeName list
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC004:
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC005 fullName has unsupported GeneralName type
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC005:
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC006 relativeName name is NULL
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC006:
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC007 relativeName name is empty list
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC007:
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC008 relativeName receives fullName list
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC008:
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC009 relativeName is not single RDN
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC009:
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC010 invalid distPoint type
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC010:
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC011 reason flags contain undefined bit
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC011:
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC012 non-critical IDP
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC012:
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC013 empty IDP rejected by set semantic validation
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC013:
+
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC014 multiple onlyContains rejected by set semantic validation
+SDV_X509_CRL_GEN_IDP_ABNORMAL_TC014:
+
+SDV_X509_CRL_CHECK_IDP_PARSE_ABNORMAL_TC001 parsed empty IDP semantic check
+SDV_X509_CRL_CHECK_IDP_PARSE_ABNORMAL_TC001:"../testdata/cert/test_for_crl/ext_idp/raw_empty.der"
+
+SDV_X509_CRL_CHECK_IDP_PARSE_ABNORMAL_TC002 parsed multiple onlyContains semantic check
+SDV_X509_CRL_CHECK_IDP_PARSE_ABNORMAL_TC002:"../testdata/cert/test_for_crl/ext_idp/raw_multi_only.der"
+
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC001 null IDP semantic check
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC001:
+
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC002 empty IDP semantic check
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC002:
+
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC003 multiple onlyContains semantic check
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC003:
+
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC004 invalid distPoint type semantic check
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC004:
+
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC005 distPoint NONE with non-null name semantic check
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC005:
+
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC006 fullName NULL name semantic check
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC006:
+
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC007 relativeName NULL name semantic check
+SDV_X509_CRL_CHECK_IDP_ABNORMAL_TC007:
+
+SDV_X509_CRL_CTRL_SetFunc_TC001
+SDV_X509_CRL_CTRL_SetFunc_TC001:"../testdata/cert/pem/crl/inter.mul.crt"
+
+SDV_X509_CRL_Sign_ParamCheck_TC001
+SDV_X509_CRL_Sign_ParamCheck_TC001:
+
+SDV_X509_CRL_Gen_Process_TC001: Parse crl
+SDV_X509_CRL_Gen_Process_TC001:
+
+SDV_X509_CRL_Gen_Process_TC002: Generate crl
+SDV_X509_CRL_Gen_Process_TC002:
+
+SDV_X509_CRL_Sign_AlgParamCheck_TC001
+SDV_X509_CRL_Sign_AlgParamCheck_TC001:
+
+SDV_X509_CRL_Sign_RevokedCheck_TC001
+SDV_X509_CRL_Sign_RevokedCheck_TC001:
+
+SDV_X509_CRL_Sign_Func_TC001 v1 cert ed25519
+SDV_X509_CRL_Sign_Func_TC001:"../testdata/cert/ed25519/ed25519.ca.pem":"../testdata/cert/ed25519/ed25519.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:0:CRYPT_MD_SHA512:0:"tmp-ed25519.crl":0
+
+SDV_X509_CRL_Sign_Func_TC001 v1 cert rsa_p1_v1.crt.der
+SDV_X509_CRL_Sign_Func_TC001:"../testdata/cert/asn1/rsa_cert/rsa_p1_v1.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p1.key.der":CRYPT_PRIKEY_RSA:0:CRYPT_MD_SHA256:0:"tmp-rsav1.crl":0
+
+SDV_X509_CRL_Sign_Func_TC001 v3 cert rsa_p8.crt.der
+SDV_X509_CRL_Sign_Func_TC001:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:0:CRYPT_MD_SHA256:1:"tmp-rsav2.crl":0
+
+SDV_X509_CRL_Sign_Func_TC001 v3 cert sm2.crt.der
+SDV_X509_CRL_Sign_Func_TC001:"../testdata/cert/asn1/sm2_cert/sm2.crt.der":"../testdata/cert/asn1/sm2_cert/sm2.key.der":CRYPT_PRIKEY_ECC:0:CRYPT_MD_SM3:1:"tmp-sm2.crl":0
+
+SDV_X509_CRL_Sign_Func_TC001 v3 cert ecdsa_sha384.crt.der
+SDV_X509_CRL_Sign_Func_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der":"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:0:CRYPT_MD_SHA384:1:"tmp-ec.crl":0
+
+SDV_X509_CRL_Sign_Func_TC001 v3 cert rsa_pss.crt.der
+SDV_X509_CRL_Sign_Func_TC001:"../testdata/cert/asn1/rsa_pss_cert/rsa_pss.crt.der":"../testdata/cert/asn1/rsa_pss_cert/rsa_pss.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:CRYPT_EMSA_PSS:CRYPT_MD_SHA256:0:"tmp-pss.crl":0
+
+SDV_X509_CRL_Sign_Func_TC001 v3 cert rsa -- rsa_pss.crt.der
+SDV_X509_CRL_Sign_Func_TC001:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:CRYPT_EMSA_PSS:CRYPT_MD_SHA256:1:"tmp-rsa-pss.crl":0
+
+SDV_X509_CRL_Sign_Func_TC001 v2 cert rsa -- rsa_pss-aki.crt.der
+SDV_X509_CRL_Sign_Func_TC001:"../testdata/cert/asn1/rsa_cert/inter2.mul.crt":"../testdata/cert/asn1/rsa_cert/inter2.mul.key":CRYPT_PRIKEY_PKCS8_UNENCRYPT:CRYPT_EMSA_PSS:CRYPT_MD_SHA256:1:"tmp-rsa-pss-aki.crl":0
+
+SDV_X509_CRL_Sign_Func_TC001 v3 cert sm2 with userid
+SDV_X509_CRL_Sign_Func_TC001:"../testdata/cert/sm2_with_userid/ca.crt":"../testdata/cert/sm2_with_userid/ca.key":CRYPT_PRIKEY_PKCS8_UNENCRYPT:0:CRYPT_MD_SM3:0:"tmp-sm2-withuserId.crl":1
+
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001 ed25519-sha512
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001:"../testdata/cert/ed25519/ed25519.ca.pem":"../testdata/cert/ed25519/ed25519.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:0:CRYPT_MD_SHA512:0:0:0:"gencon-ed25519.crl":HITLS_PKI_PRINT_DN_RFC2253:"gencon-ed25519.txt":"gencon-parseed25519.txt"
+
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001 ed25519-sha512-ssl with aki
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001:"../testdata/cert/ed25519/ed25519_ssl.crt.der":"../testdata/cert/ed25519/ed25519_ssl.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:0:CRYPT_MD_SHA512:1:0:0:"gencon-ed25519ssl.crl":HITLS_PKI_PRINT_DN_RFC2253:"gencon-ed25519ssl.txt":"gencon-parseed25519ssl.txt"
+
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001 rsa_p1-sha256
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001:"../testdata/cert/asn1/rsa_cert/rsa_p1_v1.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p1.key.der":CRYPT_PRIKEY_RSA:0:CRYPT_MD_SHA256:0:1:0:"gencon-rsap1.crl":HITLS_PKI_PRINT_DN_RFC2253:"gencon-rsap1.txt":"gencon-rsap1.txt"
+
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001 rsa_p8-sha256
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:0:CRYPT_MD_SHA256:0:0:0:"gencon-rsap8.crl":HITLS_PKI_PRINT_DN_RFC2253:"gencon-rsap8.txt":"gencon-rsap8.txt"
+
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001 rsa-sha256-ssl with aki
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001:"../testdata/cert/asn1/rsa_cert/rsa_ssl.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_ssl.key.der":CRYPT_PRIKEY_RSA:0:CRYPT_MD_SHA256:1:0:0:"gencon-rsassl.crl":HITLS_PKI_PRINT_DN_RFC2253:"gencon-rsassl.txt":"gencon-rsassl.txt"
+
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001 sm2-sm3
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001:"../testdata/cert/asn1/sm2_cert/sm2.crt.der":"../testdata/cert/asn1/sm2_cert/sm2.key.der":CRYPT_PRIKEY_ECC:0:CRYPT_MD_SM3:1:0:0:"gencon-sm2.crl":HITLS_PKI_PRINT_DN_RFC2253:"gencon-sm2.txt":"gencon-parsesm2.txt"
+
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001 sm2-sm3-ssl with aki
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001:"../testdata/cert/asn1/sm2_cert/sm2_ssl.crt.der":"../testdata/cert/asn1/sm2_cert/sm2_ssl.key.der":CRYPT_PRIKEY_ECC:0:CRYPT_MD_SM3:1:0:0:"gencon-sm2ssl.crl":HITLS_PKI_PRINT_DN_RFC2253:"gencon-sm2ssl.txt":"gencon-parsesm2ssl.txt"
+
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001 ecdsa-sha384
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der":"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:0:CRYPT_MD_SHA384:1:1:0:"gencon-ecdsa.crl":HITLS_PKI_PRINT_DN_RFC2253:"gencon-ecdsa.txt":"gencon-parseecdsa.txt"
+
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001 ecdsa-sha384-ssl with aki
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384_ssl.crt.der":"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384_ssl.key.der":CRYPT_PRIKEY_ECC:0:CRYPT_MD_SHA384:1:1:0:"gencon-ecdsassl.crl":HITLS_PKI_PRINT_DN_RFC2253:"gencon-ecdsassl.txt":"gencon-parseecdsassl.txt"
+
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001 rsapss-sha256
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001:"../testdata/cert/asn1/rsa_pss_cert/rsa_pss.crt.der":"../testdata/cert/asn1/rsa_pss_cert/rsa_pss.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:CRYPT_EMSA_PSS:CRYPT_MD_SHA256:0:0:0:"gencon-rsapss.crl":HITLS_PKI_PRINT_DN_RFC2253:"gencon-rsapss.txt":"gencon-parsersapss.txt"
+
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001 rsapss-sha256-ssl with aki
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001:"../testdata/cert/asn1/rsa_pss_cert/rsa_pss_ssl.crt.der":"../testdata/cert/asn1/rsa_pss_cert/rsa_pss_ssl.key.der":CRYPT_PRIKEY_RSA:CRYPT_EMSA_PSS:CRYPT_MD_SHA256:1:0:0:"gencon-rsapssssl.crl":HITLS_PKI_PRINT_DN_RFC2253:"gencon-rsapssssl.txt":"gencon-parsersapssssl.txt"
+
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001 rsapss_aki-sha256
+SDV_X509_CRL_GENCONSISTANT_FUNC_TC001:"../testdata/cert/asn1/rsa_cert/inter2.mul.crt":"../testdata/cert/asn1/rsa_cert/inter2.mul.key":CRYPT_PRIKEY_PKCS8_UNENCRYPT:CRYPT_EMSA_PSS:CRYPT_MD_SHA256:1:0:0:"gencon-rsapsswithaki.crl":HITLS_PKI_PRINT_DN_RFC2253:"gencon-rsapsswithaki.txt":"gencon-parsersapsswithaki.txt"
+
+SDV_X509_CRL_PARSE_ERRORPARAM_FUNC_TC001 issuername parse fail
+SDV_X509_CRL_PARSE_ERRORPARAM_FUNC_TC001:"../testdata/cert/asn1/rsa_crl/rsawithparam1.der":BSL_ASN1_ERR_MISMATCH_TAG
+
+SDV_X509_CRL_PARSE_ERRORPARAM_FUNC_TC001 thisupdatetime parse fail
+SDV_X509_CRL_PARSE_ERRORPARAM_FUNC_TC001:"../testdata/cert/asn1/rsa_crl/rsawithparam2.der":BSL_ASN1_ERR_TAG_EXPECTED
+
+SDV_X509_CRL_GEN_SETVER0NOEXT_FUNC_TC001 set version 0 without extensions
+SDV_X509_CRL_GEN_SETVER0NOEXT_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der":"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.key.der":"gen-setver0-noext.crl"
+
+SDV_X509_CRL_GEN_SETEXTERRVER_FUNC_TC001 set extension without version or error version
+SDV_X509_CRL_GEN_SETEXTERRVER_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der":"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.key.der":1:0
+
+SDV_X509_CRL_GEN_SETEXTERRVER_FUNC_TC001 set crl entry extension with error version
+SDV_X509_CRL_GEN_SETEXTERRVER_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der":"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.key.der":0:1
+
+SDV_X509_CRL_GEN_SETEXTERRVER_FUNC_TC001 set extension and crl entry extension with error version
+SDV_X509_CRL_GEN_SETEXTERRVER_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der":"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.key.der":1:1
+
+SDV_X509_CRL_GEN_ERRPRVKEY_FUNC_TC001 set error or unsupported prvKey
+SDV_X509_CRL_GEN_ERRPRVKEY_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der":"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.key.der"
+
+SDV_X509_CRL_GEN_ERRBSLTIME_FUNC_TC001 set error bsltime
+SDV_X509_CRL_GEN_ERRBSLTIME_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der":"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.key.der":"gen-testbsltime.crl"
+
+SDV_X509_CRL_GEN_NULLISSUER_FUNC_TC001 set null issuername
+SDV_X509_CRL_GEN_NULLISSUER_FUNC_TC001:
+
+SDV_X509_CRL_GEN_NULLREVOKED_FUNC_TC001 set null revoked certificate
+SDV_X509_CRL_GEN_NULLREVOKED_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der":1
+
+SDV_X509_CRL_GEN_NULLREVOKED_FUNC_TC001 set null revoked certificate
+SDV_X509_CRL_GEN_NULLREVOKED_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der":0
+
+SDV_X509_CRL_GEN_NULLAKI_FUNC_TC001 set null aki
+SDV_X509_CRL_GEN_NULLAKI_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der"
+
+SDV_X509_CRL_GEN_ERRCRLNUMBER_FUNC_TC001 set err crl number
+SDV_X509_CRL_GEN_ERRCRLNUMBER_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der"
+
+SDV_X509_CRL_GEN_ERRDELTACRLINDICATOR_FUNC_TC001 reject non-critical delta crl indicator
+SDV_X509_CRL_GEN_ERRDELTACRLINDICATOR_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der"
+
+SDV_X509_CRL_GEN_ERRDELTACRLINDICATOR_FUNC_TC002 reject invalid delta crl indicator length
+SDV_X509_CRL_GEN_ERRDELTACRLINDICATOR_FUNC_TC002:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der"
+
+SDV_X509_CRL_GEN_ERRREASONCODE_FUNC_TC001 set err reason code
+SDV_X509_CRL_GEN_ERRREASONCODE_FUNC_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der":"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.key.der":"gen-reasoncode8.crl"
+
+SDV_X509_CRL_GEN_NULLCERTISSUER_FUNC_TC001 set null certificate issuer
+SDV_X509_CRL_GEN_NULLCERTISSUER_FUNC_TC001:
+
+SDV_X509_CRL_INVALIED_TEST_TC001
+SDV_X509_CRL_INVALIED_TEST_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/ca-1-rsa-sha256-v1.der"
+
+SDV_X509_CRL_IDP_PARSE_STUB_TC001 ThirdParty IDP fullName directoryName
+SDV_X509_CRL_IDP_PARSE_STUB_TC001:BSL_FORMAT_ASN1:"../testdata/cert/test_for_crl/ext_idp/fullname_dir.der"
+
+SDV_X509_CRL_DELTA_PARSE_STUB_TC001 critical Delta CRL indicator
+SDV_X509_CRL_DELTA_PARSE_STUB_TC001:BSL_FORMAT_PEM:"../testdata/cert/test_for_crl/crl_parse/crl/demoCA_rsa2048_v2_critical_delta_crl_indicator.crl"
+
+SDV_X509_CRL_PARSE_STUB_TC001 parse pem time optional crl
+SDV_X509_CRL_PARSE_STUB_TC001:BSL_FORMAT_PEM:"../testdata/cert/pem/crl/time.optional.pem":35
+
+SDV_X509_CRL_PARSE_STUB_TC001 parse unknown(asn1) crl
+SDV_X509_CRL_PARSE_STUB_TC001:BSL_FORMAT_UNKNOWN:"../testdata/cert/asn1/ca-empty-rsa-sha256-v2.der":32
+
+SDV_X509_CRL_PARSE_STUB_TC001
+SDV_X509_CRL_PARSE_STUB_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/ca-empty-rsa-sha256-v2.der":32
+
+SDV_X509_CRL_PARSE_STUB_TC001
+SDV_X509_CRL_PARSE_STUB_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/ca-1-rsa-sha256-v2.der":34
+
+SDV_X509_CRL_PARSE_STUB_TC001
+SDV_X509_CRL_PARSE_STUB_TC001:BSL_FORMAT_ASN1:"../testdata/cert/asn1/ca-1-rsa-sha256-v1.der":32
+
+SDV_X509_CRL_PARSE_STUB_TC001 revokelist ext
+SDV_X509_CRL_PARSE_STUB_TC001:BSL_FORMAT_UNKNOWN:"../testdata/cert/pem/crl/crl_v2.mul3.crl":49
+
+SDV_X509_CRL_IDP_ENCODE_STUB_TC001 set fullName directoryName IDP
+SDV_X509_CRL_IDP_ENCODE_STUB_TC001:
+
+SDV_X509_CRL_DELTA_ENCODE_STUB_TC001 set Delta CRL indicator
+SDV_X509_CRL_DELTA_ENCODE_STUB_TC001:
+
+SDV_X509_CRL_ENCODE_STUB_TC001 v1 cert ed25519
+SDV_X509_CRL_ENCODE_STUB_TC001:"../testdata/cert/ed25519/ed25519.ca.pem":"../testdata/cert/ed25519/ed25519.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:0:CRYPT_MD_SHA512:0:"tmp-ed25519.crl":0:3
+
+SDV_X509_CRL_ENCODE_STUB_TC001 v1 cert rsa_p1_v1.crt.der
+SDV_X509_CRL_ENCODE_STUB_TC001:"../testdata/cert/asn1/rsa_cert/rsa_p1_v1.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p1.key.der":CRYPT_PRIKEY_RSA:0:CRYPT_MD_SHA256:0:"tmp-rsav1.crl":0:3
+
+SDV_X509_CRL_ENCODE_STUB_TC001 v3 cert rsa_p8.crt.der
+SDV_X509_CRL_ENCODE_STUB_TC001:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:0:CRYPT_MD_SHA256:1:"tmp-rsav2.crl":0:3
+
+SDV_X509_CRL_ENCODE_STUB_TC001 v3 cert sm2.crt.der
+SDV_X509_CRL_ENCODE_STUB_TC001:"../testdata/cert/asn1/sm2_cert/sm2.crt.der":"../testdata/cert/asn1/sm2_cert/sm2.key.der":CRYPT_PRIKEY_ECC:0:CRYPT_MD_SM3:1:"tmp-sm2.crl":0:3
+
+SDV_X509_CRL_ENCODE_STUB_TC001 v3 cert ecdsa_sha384.crt.der
+SDV_X509_CRL_ENCODE_STUB_TC001:"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.crt.der":"../testdata/cert/asn1/ecdsa_cert/ecdsa_sha384.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:0:CRYPT_MD_SHA384:1:"tmp-ec.crl":0:3
+
+SDV_X509_CRL_ENCODE_STUB_TC001 v3 cert rsa_pss.crt.der
+SDV_X509_CRL_ENCODE_STUB_TC001:"../testdata/cert/asn1/rsa_pss_cert/rsa_pss.crt.der":"../testdata/cert/asn1/rsa_pss_cert/rsa_pss.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:CRYPT_EMSA_PSS:CRYPT_MD_SHA256:0:"tmp-pss.crl":0:12
+
+SDV_X509_CRL_ENCODE_STUB_TC001 v3 cert rsa -- rsa_pss.crt.der
+SDV_X509_CRL_ENCODE_STUB_TC001:"../testdata/cert/asn1/rsa_cert/rsa_p8.crt.der":"../testdata/cert/asn1/rsa_cert/rsa_p8.key.der":CRYPT_PRIKEY_PKCS8_UNENCRYPT:CRYPT_EMSA_PSS:CRYPT_MD_SHA256:1:"tmp-rsa-pss.crl":0:12
+
+SDV_X509_CRL_ENCODE_STUB_TC001 v2 cert rsa -- rsa_pss-aki.crt.der
+SDV_X509_CRL_ENCODE_STUB_TC001:"../testdata/cert/asn1/rsa_cert/inter2.mul.crt":"../testdata/cert/asn1/rsa_cert/inter2.mul.key":CRYPT_PRIKEY_PKCS8_UNENCRYPT:CRYPT_EMSA_PSS:CRYPT_MD_SHA256:1:"tmp-rsa-pss-aki.crl":0:12
+
+SDV_X509_CRL_ENCODE_STUB_TC001 v3 cert sm2 with userid
+SDV_X509_CRL_ENCODE_STUB_TC001:"../testdata/cert/sm2_with_userid/ca.crt":"../testdata/cert/sm2_with_userid/ca.key":CRYPT_PRIKEY_PKCS8_UNENCRYPT:0:CRYPT_MD_SM3:0:"tmp-sm2-withuserId.crl":1:3
+
+SDV_X509_CRL_ENTRY_SET_SERIAL_REPLACE_MEM_TC001 repeat set generated CRL entry serial
+SDV_X509_CRL_ENTRY_SET_SERIAL_REPLACE_MEM_TC001:
+
+SDV_X509_CRL_PARSE_REVOKED_EXT_FAIL_FREE_TC001 parse failure releases revoked entry extensions
+SDV_X509_CRL_PARSE_REVOKED_EXT_FAIL_FREE_TC001:"../testdata/cert/pem/crl/crl_v2.mul3.crl"

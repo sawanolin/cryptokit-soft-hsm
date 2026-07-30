@@ -1,0 +1,10 @@
+prefix=/d/dptui/mm (1)/SDF/dist/sdfapi-windows-x64
+exec_prefix=${prefix}
+libdir=/d/dptui/mm (1)/SDF/dist/sdfapi-windows-x64/lib
+includedir=/d/dptui/mm (1)/SDF/dist/sdfapi-windows-x64/include
+
+Name: sdfx
+Description: SDFX - Software SDF Implementation based on GM/T 0018-2023
+Version: 1.0.0
+Libs: -L${libdir} -lsdfx
+Cflags: -I${includedir}

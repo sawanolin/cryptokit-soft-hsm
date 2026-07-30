@@ -1,0 +1,60 @@
+# Build directories
+build/
+build_*/
+Build/
+BUILD/
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+Makefile
+CTestTestfile.cmake
+
+# Compiled Object files
+*.o
+*.obj
+*.o.d
+
+# Libraries
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+
+# Package config files
+*.pc
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Editor files
+.vscode/
+.idea/
+*.kate-swp
+
+# Core dumps
+core
+core.*
+
+# Configuration files (except examples)
+/sdfx.conf
+
+# Node.js files (if any)
+package-lock.json
+node_modules/
+

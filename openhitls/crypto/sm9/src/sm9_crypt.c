@@ -1,0 +1,129 @@
+/*
+ * This file is part of the openHiTLS project.
+ *
+ * openHiTLS is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *
+ *     http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
+ */
+
+#include "hitls_build.h"
+#ifdef HITLS_CRYPTO_SM9
+
+#include "crypt_sm9.h"
+#include "crypt_errno.h"
+#include "sm9.h"
+#include "bsl_sal.h"
+#include <string.h>
+
+/*============================================================================*/
+
+int32_t SM9_SetEncMasterKey(SM9_Ctx *ctx, uint8_t *msk)
+{
+    if (!ctx || !msk) {
+        return CRYPT_SM9_ERR_BAD_INPUT;
+    }
+
+    memcpy(ctx->enc_msk, msk, SM9_ENC_SYS_PRIKEY_BYTES);
+
+    int32_t ret = SM9_Alg_MEKG(ctx->enc_msk, ctx->enc_mpk);
+    if (ret != CRYPT_SUCCESS) {
+        return ret;
+    }
+
+    ret = SM9_Get_Enc_G(ctx->enc_g, ctx->enc_mpk);
+    if (ret != CRYPT_SUCCESS) {
+        return ret;
+    }
+
+    ctx->has_enc_sys = 1;
+    ctx->has_enc_g = 1;
+
+    return CRYPT_SUCCESS;
+}
+
+ int32_t SM9_GenEncUserKey(SM9_Ctx *ctx, const uint8_t *user_id, uint32_t id_len)
+{
+    if (!ctx || !user_id || id_len == 0 || id_len > 256) {
+        return CRYPT_SM9_ERR_BAD_INPUT;
+    }
+
+    if (!ctx->has_enc_sys) {
+        return CRYPT_SM9_ERR_BAD_INPUT;
+    }
+
+    memcpy(ctx->user_id, user_id, id_len);
+    ctx->user_id_len = id_len;
+
+    int32_t ret = SM9_Alg_UEKG(user_id, id_len, ctx->enc_msk, ctx->enc_dek);
+    if (ret != CRYPT_SUCCESS) {
+        return ret;
+    }
+
+    ctx->has_enc_usr = 1;
+
+    return CRYPT_SUCCESS;
+}
+
+int32_t SM9_SetEncUserKey(SM9_Ctx *ctx, uint8_t *user_id, uint32_t id_len, uint8_t *dek)
+{
+    if (!ctx || !user_id || id_len == 0 || id_len > 256 || !dek) {
+        return CRYPT_SM9_ERR_BAD_INPUT;
+    }
+
+    memcpy(ctx->user_id, user_id, id_len);
+    ctx->user_id_len = id_len;
+
+    memcpy(ctx->enc_dek, dek, SM9_ENC_USR_PRIKEY_BYTES);
+
+    ctx->has_enc_usr = 1;
+
+    return CRYPT_SUCCESS;
+}
+
+/*============================================================================*/
+/*============================================================================*/
+
+int32_t SM9_EncryptCtx(const SM9_Ctx *ctx, const uint8_t *user_id, uint32_t id_len,
+                       const uint8_t *msg, uint32_t mlen, uint8_t *cipher, uint32_t *clen)
+{
+    uint8_t randBuf[32];
+    int32_t ret;
+
+    if (!ctx || !user_id || !msg || !cipher || !clen) {
+        return CRYPT_SM9_ERR_BAD_INPUT;
+    }
+
+    if (!ctx->has_enc_sys) {
+        return CRYPT_SM9_ERR_BAD_INPUT;
+    }
+
+    const uint8_t *g_ptr = ctx->has_enc_g ? ctx->enc_g : NULL;
+
+    ret = sm9_rand(randBuf, sizeof(randBuf));
+    if (ret != CRYPT_SUCCESS) {
+        return CRYPT_SM9_ERR_ENCRYPT_FAILED;
+    }
+    return SM9_Alg_Enc(msg, mlen, user_id, id_len, randBuf, g_ptr, ctx->enc_mpk, cipher, clen);
+}
+
+int32_t SM9_DecryptCtx(const SM9_Ctx *ctx, const uint8_t *cipher, uint32_t clen, uint8_t *msg, uint32_t *mlen)
+{
+    if (!ctx || !cipher || !msg || !mlen) {
+        return CRYPT_SM9_ERR_BAD_INPUT;
+    }
+
+    if (!ctx->has_enc_usr) {
+        return CRYPT_SM9_ERR_BAD_INPUT;
+    }
+
+    return SM9_Alg_Dec(cipher, clen, ctx->enc_dek, ctx->user_id, ctx->user_id_len, msg, mlen);
+}
+
+#endif // HITLS_CRYPTO_SM9

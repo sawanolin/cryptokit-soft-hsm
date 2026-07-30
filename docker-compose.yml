@@ -1,0 +1,19 @@
+services:
+  softhsm:
+    image: sawanolin/cryptokit-soft-hsm:1.0.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "0.0.0.0:18081:18081"
+      - "0.0.0.0:18080:18080"
+    volumes:
+      - sdfx-data:/var/lib/sdfx
+    restart: unless-stopped
+    stop_grace_period: 15s
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  sdfx-data:
+

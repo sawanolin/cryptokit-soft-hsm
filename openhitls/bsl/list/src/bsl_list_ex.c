@@ -1,0 +1,206 @@
+/*
+ * This file is part of the openHiTLS project.
+ *
+ * openHiTLS is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *
+ *     http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
+ */
+
+#include "hitls_build.h"
+#ifdef HITLS_BSL_LIST
+
+#include <string.h>
+#include "bsl_sal.h"
+#include "bsl_list_internal.h"
+
+BslListNode *BSL_LIST_FirstNode(const BslList *list)
+{
+    return list == NULL ? NULL : list->first;
+}
+
+BslListNode *BSL_LIST_LastNode(const BslList *list)
+{
+    return list == NULL ? NULL : list->last;
+}
+
+void *BSL_LIST_GetData(const BslListNode *pstNode)
+{
+    return pstNode == NULL ? NULL : pstNode->data;
+}
+
+void *BSL_LIST_FirstNodeData(const BslList *list)
+{
+    return (list == NULL || list->first == NULL) ? NULL : list->first->data;
+}
+
+BslListNode *BSL_LIST_GetNextNode(const BslList *pstList, const BslListNode *pstListNode)
+{
+    if (pstList == NULL) {
+        return NULL;
+    }
+    return pstListNode != NULL ? pstListNode->next : pstList->first;
+}
+
+void *BSL_LIST_GetIndexNodeEx(uint32_t ulIndex, const BslListNode *pstListNode, const BslList *pstList)
+{
+    const BslListNode *pstTmpListNode = NULL;
+    (void)pstListNode;
+    if (pstList == NULL) {
+        return NULL;
+    }
+
+    if (ulIndex >= (uint32_t)pstList->count) {
+        return NULL;
+    }
+
+    if (pstList->first == NULL) {
+        return NULL;
+    }
+
+    pstTmpListNode = pstList->first;
+    for (uint32_t ulIter = 0; ulIter < ulIndex; ulIter++) {
+        pstTmpListNode = pstTmpListNode->next;
+        if (pstTmpListNode == NULL) {
+            return NULL;
+        }
+    }
+
+    return pstTmpListNode->data;
+}
+
+BslListNode *BSL_LIST_GetPrevNode(const BslListNode *pstListNode)
+{
+    return pstListNode == NULL ? NULL : pstListNode->prev;
+}
+
+void *BSL_LIST_SearchDataConst(const BslList *pList, const void *pSearchFor, BSL_LIST_PFUNC_CMP pSearcher,
+    int32_t *pstErr)
+{
+    const BslListNode *pstCurrentNode = NULL;
+
+    if (pList == NULL || pSearchFor == NULL) {
+        return NULL;
+    }
+    if (pstErr != NULL) {
+        *pstErr = 0;
+    }
+    /* Keep the same match order as BSL_LIST_Search, but leave list->curr untouched. */
+    for (pstCurrentNode = pList->first; pstCurrentNode != NULL; pstCurrentNode = pstCurrentNode->next) {
+        if (pSearcher == NULL) {
+            if (memcmp(pstCurrentNode->data, pSearchFor, (uint32_t)pList->dataSize) == 0) {
+                return pstCurrentNode->data;
+            }
+            continue;
+        }
+
+        int32_t retVal = pSearcher(pstCurrentNode->data, pSearchFor);
+        if (retVal == SEC_INT_ERROR) {
+            if (pstErr != NULL) {
+                *pstErr = SEC_INT_ERROR;
+            }
+            return NULL;
+        }
+        if (retVal == 0) {
+            return pstCurrentNode->data;
+        }
+    }
+
+    return NULL;
+}
+
+void BSL_LIST_DeleteNode(BslList *pstList, const BslListNode *pstListNode, BSL_LIST_PFUNC_FREE pfFreeFunc)
+{
+    BslListNode *pstCurrentNode = NULL;
+
+    if (pstList == NULL) {
+        return;
+    }
+
+    pstCurrentNode = pstList->first;
+
+    while (pstCurrentNode != NULL) {
+        if (pstCurrentNode == pstListNode) {
+            // found matching node, delete this node and adjust the list
+            if ((pstCurrentNode->next) != NULL) {
+                pstCurrentNode->next->prev = pstCurrentNode->prev;
+            } else {
+                pstList->last = pstCurrentNode->prev;
+            }
+
+            if ((pstCurrentNode->prev) != NULL) {
+                pstCurrentNode->prev->next = pstCurrentNode->next;
+            } else {
+                pstList->first = pstCurrentNode->next;
+            }
+            if (pstCurrentNode == pstList->curr) {
+                pstList->curr = pstList->curr->next;
+            }
+            pstList->count--;
+
+            if (pfFreeFunc == NULL) {
+                BSL_SAL_FREE(pstCurrentNode->data);
+            } else {
+                pfFreeFunc(pstCurrentNode->data);
+            }
+
+            BSL_SAL_FREE(pstCurrentNode);
+            return;
+        }
+
+        pstCurrentNode = pstCurrentNode->next;
+    }
+}
+
+void BSL_LIST_DetachNode(BslList *pstList, BslListNode **pstListNode)
+{
+    if (pstList == NULL || pstListNode == NULL) {
+        return;
+    }
+
+    BslListNode *detachNode = *pstListNode;
+    if (detachNode == NULL) {
+        return;
+    }
+
+    BslListNode *pstCurrentNode = pstList->first;
+    while (pstCurrentNode != NULL) {
+        if (pstCurrentNode != detachNode) {
+            pstCurrentNode = pstCurrentNode->next;
+            continue;
+        }
+
+        BslListNode *next = pstCurrentNode->next;
+        BslListNode *prev = pstCurrentNode->prev;
+
+        // found matching node, delete this node and adjust the list
+        if (next != NULL) {
+            next->prev = prev;
+        } else {
+            pstList->last = prev;
+        }
+
+        if (prev != NULL) {
+            prev->next = next;
+        } else {
+            pstList->first = next;
+        }
+
+        if (pstCurrentNode == pstList->curr) {
+            pstList->curr = (next != NULL) ? next : prev;
+        }
+
+        *pstListNode = (next != NULL) ? next : prev;
+        pstList->count--;
+
+        BSL_SAL_FREE(pstCurrentNode);
+        return;
+    }
+}
+#endif /* HITLS_BSL_LIST */

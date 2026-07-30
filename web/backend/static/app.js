@@ -1,0 +1,411 @@
+"use strict";
+
+const state = { csrf: null, initialized: false, page: null, role: null, pages: [] };
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+
+function notice(message, error = false) {
+  const host = $("#notice");
+  host.innerHTML = "";
+  const item = document.createElement("div");
+  item.className = `notice${error ? " error" : ""}`;
+  item.textContent = message;
+  host.append(item);
+  setTimeout(() => item.remove(), 4500);
+}
+
+async function api(path, options = {}) {
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (state.csrf && !["GET", "HEAD"].includes((options.method || "GET").toUpperCase())) {
+    headers["X-CSRF-Token"] = state.csrf;
+  }
+  const response = await fetch(path, { credentials: "same-origin", ...options, headers });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data.detail || data.error?.message || `请求失败（${response.status}）`;
+    throw new Error(message);
+  }
+  return data;
+}
+
+function formJson(form) {
+  return Object.fromEntries(new FormData(form).entries());
+}
+
+function showMode(mode) {
+  $("#initialize-view").hidden = mode !== "initialize";
+  $("#login-view").hidden = mode !== "login";
+  $("#app-view").hidden = mode !== "app";
+  $("#nav").hidden = mode !== "app";
+  $("#logout").hidden = mode !== "app";
+  $("#page-title").textContent = mode === "initialize" ? "初始化" : mode === "login" ? "管理员登录" : "运行概览";
+}
+
+function setService(ok, text) {
+  $("#service-dot").className = `dot ${ok ? "ok" : "error"}`;
+  $("#service-label").textContent = text;
+}
+
+function applyAccess(session) {
+  state.csrf = session.csrf;
+  state.role = session.role;
+  state.pages = session.pages || [];
+  $$("#nav button").forEach((button) => {
+    button.hidden = !state.pages.includes(button.dataset.page);
+  });
+  const first = state.pages[0];
+  if (first) switchPage(first);
+}
+
+function switchPage(page) {
+  if (state.pages.length && !state.pages.includes(page)) return;
+  state.page = page;
+  $$(".page").forEach((item) => { item.hidden = item.id !== `page-${page}`; });
+  $$("#nav button").forEach((item) => item.classList.toggle("active", item.dataset.page === page));
+  const titles = { administrators: "管理员管理", dashboard: "运行概览", keys: "密码服务与密钥", device: "设备信息", sessions: "会话管理", testing: "密码自检", maintenance: "备份与恢复", audit: "审计日志" };
+  $("#page-title").textContent = titles[page];
+  if (page === "administrators") loadAdministrators();
+  if (page === "dashboard") loadDashboard();
+  if (page === "keys") {
+    loadKeys();
+    if (typeof loadKeks === "function") loadKeks();
+  }
+  if (page === "device") loadDevice();
+  if (page === "maintenance" && typeof loadBackups === "function") loadBackups();
+  if (page === "audit") loadAudit();
+}
+
+async function loadDashboard() {
+  const data = await api("/api/status");
+  $("#metric-status").textContent = data.daemon.status === "running" ? "正常" : "异常";
+  $("#metric-keys").textContent = data.daemon.keys;
+  $("#metric-sessions").textContent = data.daemon.active_sessions;
+  $("#metric-requests").textContent = data.daemon.total_requests;
+  $("#device-heading").textContent = data.device.device_name;
+  $("#summary-vendor").textContent = data.device.vendor;
+  $("#summary-serial").textContent = data.device.serial;
+  setService(true, "密码服务运行正常");
+}
+
+function actionButton(label, className, handler) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `mini ${className || ""}`;
+  button.textContent = label;
+  button.addEventListener("click", handler);
+  return button;
+}
+
+async function loadKeys() {
+  const rows = $("#key-rows");
+  rows.innerHTML = '<tr><td colspan="7">正在读取…</td></tr>';
+  try {
+    const keys = await api("/api/keys");
+    rows.innerHTML = "";
+    if (!keys.length) rows.innerHTML = '<tr><td colspan="7">尚未生成内部密钥</td></tr>';
+    for (const key of keys) {
+      const tr = document.createElement("tr");
+      const purpose = key.type === "sign" ? "签名" : key.type === "enc" ? "加密" : key.purpose;
+      const algorithmQuery = `?algorithm=${encodeURIComponent(key.algorithm)}`;
+      [purpose, key.index, `${key.algorithm}-${key.bits}`].forEach((value) => {
+        const td = document.createElement("td"); td.textContent = value; tr.append(td);
+      });
+      const statusCell = document.createElement("td");
+      const statusBadge = document.createElement("span");
+      statusBadge.className = `status ${key.enabled ? "ok" : "off"}`;
+      statusBadge.textContent = key.enabled ? "启用" : "停用";
+      statusCell.append(statusBadge); tr.append(statusCell);
+      const integrityCell = document.createElement("td");
+      const integrityBadge = document.createElement("span");
+      integrityBadge.className = `status ${key.integrity === false ? "off" : "ok"}`;
+      integrityBadge.textContent = key.integrity === false ? "异常" : "已保护";
+      integrityCell.append(integrityBadge); tr.append(integrityCell);
+      const fingerprint = document.createElement("td");
+      fingerprint.className = "fingerprint"; fingerprint.title = key.fingerprint;
+      fingerprint.textContent = key.fingerprint; tr.append(fingerprint);
+      const actions = document.createElement("td"); actions.className = "actions";
+      actions.append(actionButton("校验", "", async () => {
+        try {
+          const result = await api(`/api/keys/${key.type}/${key.index}/verify${algorithmQuery}`, { method: "POST", body: "{}" });
+          notice(result.valid ? "HMAC-SM3 完整性校验通过" : "完整性校验失败", !result.valid);
+          await loadKeys();
+        } catch (error) { notice(error.message, true); }
+      }));
+      actions.append(actionButton("改索引", "", () => {
+        const form = $("#reindex-form"); form.algorithm.value = key.algorithm; form.key_type.value = key.type;
+        form.old_index.value = key.index; form.new_index.value = key.index;
+        $("#reindex-dialog").showModal();
+      }));
+      actions.append(actionButton(key.enabled ? "停用" : "启用", "", async () => {
+        try { await api(`/api/keys/${key.type}/${key.index}/${key.enabled ? "disable" : "enable"}${algorithmQuery}`, { method: "POST", body: "{}" }); await loadKeys(); }
+        catch (error) { notice(error.message, true); }
+      }));
+      actions.append(actionButton("公钥", "", async () => {
+        try { const result = await api(`/api/keys/${key.type}/${key.index}/public${algorithmQuery}`); await navigator.clipboard.writeText(result.data); notice("公钥 Base64 已复制"); }
+        catch (error) { notice(error.message, true); }
+      }));
+      actions.append(actionButton("改口令", "", () => {
+        const form = $("#password-form"); form.algorithm.value = key.algorithm; form.key_type.value = key.type; form.index.value = key.index; $("#password-dialog").showModal();
+      }));
+      actions.append(actionButton("删除", "delete", () => {
+        const form = $("#delete-form"); form.algorithm.value = key.algorithm; form.key_type.value = key.type; form.index.value = key.index; $("#delete-dialog").showModal();
+      }));
+      tr.append(actions); rows.append(tr);
+    }
+  } catch (error) { rows.innerHTML = ""; notice(error.message, true); }
+}
+async function loadDevice() {
+  try {
+    const device = await api("/api/device");
+    const form = $("#device-form");
+    form.vendor.value = device.vendor;
+    form.device_name.value = device.device_name;
+    form.serial.value = device.serial;
+  } catch (error) { notice(error.message, true); }
+}
+
+async function loadAudit() {
+  try {
+    const [events, settings] = await Promise.all([
+      api("/api/audit?limit=200"), api("/api/audit/settings"),
+    ]);
+    const settingsForm = $("#audit-settings-form");
+    settingsForm.retention_days.value = settings.retention_days;
+    settingsForm.display_level.value = settings.display_level;
+    const rows = $("#audit-rows");
+    rows.innerHTML = "";
+    if (!events.length) rows.innerHTML = '<tr><td colspan="9">当前级别下暂无审计事件</td></tr>';
+    for (const event of events) {
+      const tr = document.createElement("tr");
+      [
+        new Date(event.occurred_at * 1000).toLocaleString(),
+        event.level, event.category, event.username, event.action, event.target,
+        event.result, event.remote_addr, event.details || "—",
+      ].forEach((value) => {
+        const td = document.createElement("td");
+        td.textContent = value;
+        tr.append(td);
+      });
+      rows.append(tr);
+    }
+  } catch (error) { notice(error.message, true); }
+}
+
+$("#initialize-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formJson(form);
+  try {
+    await api("/api/initialize", { method: "POST", body: JSON.stringify(data) });
+    form.reset();
+    showMode("login");
+    notice("初始化完成，请登录");
+  } catch (error) { notice(error.message, true); }
+});
+
+$("#login-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const data = formJson(form);
+
+  try {
+    const result = await api("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+
+    form.reset();
+    showMode("app");
+    applyAccess(result);
+  } catch (error) {
+    notice(error.message, true);
+  }
+});
+
+$("#logout").addEventListener("click", async () => {
+  try { await api("/api/auth/logout", { method: "POST", body: "{}" }); } catch (_) {}
+  state.csrf = null;
+  showMode("login");
+});
+
+$("#device-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  try {
+    await api("/api/device", { method: "PATCH", body: JSON.stringify(formJson(form)) });
+    notice("设备信息已保存");
+    await loadDashboard();
+  } catch (error) { notice(error.message, true); }
+});
+
+$("#open-key-dialog").addEventListener("click", () => $("#key-dialog").showModal());
+$("#key-form [name=algorithm]").addEventListener("change", (event) => {
+  const bits = $("#key-form [name=bits]");
+  const rsa = event.currentTarget.value === "RSA";
+  bits.value = rsa ? "2048" : "256";
+  bits.min = rsa ? "1024" : "256";
+  bits.max = rsa ? "2048" : "256";
+});
+$$("[data-close]").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
+
+$("#key-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formJson(form);
+  data.index = Number(data.index);
+  data.bits = Number(data.bits);
+  try {
+    await api("/api/keys", { method: "POST", body: JSON.stringify(data) });
+    $("#key-dialog").close();
+    form.reset();
+    notice("内部密钥已生成");
+    await loadKeys();
+  } catch (error) { notice(error.message, true); }
+});
+
+$("#password-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formJson(form);
+  try {
+    await api("/api/keys/" + data.key_type + "/" + data.index + "/password?algorithm=" + encodeURIComponent(data.algorithm), {
+      method: "POST",
+      body: JSON.stringify({ old_password: data.old_password, new_password: data.new_password }),
+    });
+    $("#password-dialog").close();
+    form.reset();
+    notice("密钥口令已修改");
+  } catch (error) { notice(error.message, true); }
+});
+
+$("#delete-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formJson(form);
+  try {
+    await api(`/api/keys/${data.key_type}/${data.index}?algorithm=${encodeURIComponent(data.algorithm)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ password: data.password, confirmation: data.confirmation }),
+    });
+    $("#delete-dialog").close();
+    form.reset();
+    notice("内部密钥已删除");
+    await loadKeys();
+  } catch (error) { notice(error.message, true); }
+});
+
+async function loadAdministrators() {
+  const rows = $("#admin-rows");
+  rows.innerHTML = '<tr><td colspan="5">正在读取…</td></tr>';
+  try {
+    const users = await api("/api/administrators"); rows.innerHTML = "";
+    for (const user of users) {
+      const tr = document.createElement("tr");
+      [user.username, user.role_label, user.enabled ? "启用" : "停用", new Date(user.created_at * 1000).toLocaleString()].forEach((value) => {
+        const td = document.createElement("td"); td.textContent = value; tr.append(td);
+      });
+      const actions = document.createElement("td"); actions.className = "actions";
+      actions.append(actionButton("配置", "", () => {
+        const form = $("#admin-edit-form"); form.username.value = user.username;
+        form.role.value = user.role; form.password.value = ""; form.enabled.checked = user.enabled;
+        $("#admin-edit-dialog").showModal();
+      }));
+      actions.append(actionButton("删除", "delete", () => {
+        const form = $("#admin-delete-form"); form.username.value = user.username;
+        $("#admin-delete-dialog").showModal();
+      }));
+      tr.append(actions); rows.append(tr);
+    }
+  } catch (error) { rows.innerHTML = ""; notice(error.message, true); }
+}
+
+$("#open-admin-dialog").addEventListener("click", () => $("#admin-dialog").showModal());
+$("#admin-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); const form = event.currentTarget;
+  try { await api("/api/administrators", { method: "POST", body: JSON.stringify(formJson(form)) }); $("#admin-dialog").close(); form.reset(); notice("管理员已创建"); await loadAdministrators(); }
+  catch (error) { notice(error.message, true); }
+});
+$("#admin-edit-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); const form = event.currentTarget; const data = formJson(form);
+  const body = { role: data.role, enabled: form.enabled.checked };
+  if (data.password) body.password = data.password;
+  try { await api(`/api/administrators/${encodeURIComponent(data.username)}`, { method: "PATCH", body: JSON.stringify(body) }); $("#admin-edit-dialog").close(); form.reset(); notice("管理员配置已保存"); await loadAdministrators(); }
+  catch (error) { notice(error.message, true); }
+});
+$("#admin-delete-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); const form = event.currentTarget; const data = formJson(form);
+  try { await api(`/api/administrators/${encodeURIComponent(data.username)}`, { method: "DELETE", body: JSON.stringify({ password: data.password, confirmation: data.confirmation }) }); $("#admin-delete-dialog").close(); form.reset(); notice("管理员已删除"); await loadAdministrators(); }
+  catch (error) { notice(error.message, true); }
+});
+$("#reindex-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); const form = event.currentTarget; const data = formJson(form);
+  try { await api(`/api/keys/${data.key_type}/${data.old_index}/reindex?algorithm=${encodeURIComponent(data.algorithm)}`, { method: "POST", body: JSON.stringify({ new_index: Number(data.new_index) }) }); $("#reindex-dialog").close(); form.reset(); notice("密钥索引已修改并重新计算完整性值"); await loadKeys(); }
+  catch (error) { notice(error.message, true); }
+});
+$("#run-selftest").addEventListener("click", async () => {
+  const output = $("#selftest-output");
+  output.textContent = "正在执行…";
+  try {
+    const result = await api("/api/crypto/selftest", { method: "POST", body: "{}" });
+    output.textContent = "总体: " + result.status + "\n" +
+      "随机数: " + result.random.status + " (" + result.random.bytes + " 字节)\n" +
+      "SM3: " + result.sm3.status + " (" + result.sm3.vector + " 已知向量)\n" +
+      "SM4: " + result.sm4.status + " (" + result.sm4.mode + " 回环)\n" +
+      "SM2: " + result.sm2.status + " (临时密钥签名验签)\n" +
+      "RSA: " + result.rsa.status + " (" + result.rsa.bits + " 位临时密钥私钥/公钥回环)\n" +
+      "耗时: " + result.elapsed_ms + " ms";
+  } catch (error) {
+    output.textContent = error.message;
+    notice(error.message, true);
+  }
+});
+
+$("#run-random").addEventListener("click", async () => {
+  const output = $("#random-output");
+  output.textContent = "正在执行…";
+  try {
+    const result = await api(`/api/crypto/random?length=${Number($("#random-length").value)}`, { method: "POST", body: "{}" });
+    output.textContent = `长度: ${result.length} 字节\n耗时: ${result.elapsed_ms} ms\n\n${result.hex}`;
+  } catch (error) {
+    output.textContent = error.message;
+    notice(error.message, true);
+  }
+});
+
+$("#audit-settings-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); const form = event.currentTarget; const data = formJson(form);
+  try {
+    await api("/api/audit/settings", { method: "PATCH", body: JSON.stringify({
+      retention_days: Number(data.retention_days), display_level: data.display_level,
+    }) });
+    notice("审计日志配置已保存"); await loadAudit();
+  } catch (error) { notice(error.message, true); }
+});
+$("#refresh-audit").addEventListener("click", loadAudit);
+$("#export-audit").addEventListener("click", () => window.location.assign("/api/audit/export"));
+$$("#nav button").forEach((button) => button.addEventListener("click", () => switchPage(button.dataset.page)));
+
+(async function bootstrap() {
+  try {
+    const health = await api("/api/health");
+    state.initialized = health.initialized;
+    setService(true, "密码服务运行正常");
+    if (!health.initialized) {
+      showMode("initialize");
+      return;
+    }
+    try {
+      const session = await api("/api/auth/session");
+      showMode("app");
+      applyAccess(session);
+    } catch (_) {
+      showMode("login");
+    }
+  } catch (error) {
+    setService(false, "密码服务不可用");
+    showMode("login");
+    notice(error.message, true);
+  }
+})();
+

@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CryptoKit SoftHSM Manager</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">CK</div>
+        <div><strong>CryptoKit</strong><span>SoftHSM Manager</span></div>
+      </div>
+      <nav id="nav" hidden>
+        <button data-page="administrators">管理员管理</button>
+        <button data-page="dashboard" class="active">运行概览</button>
+        <button data-page="keys">密钥管理</button>
+        <button data-page="device">设备信息</button>
+        <button data-page="sessions">会话管理</button>
+        <button data-page="testing">密码自检</button>
+        <button data-page="maintenance">备份与恢复</button>
+        <button data-page="audit">审计日志</button>
+      </nav>
+      <div class="project-links" aria-label="开源与许可证">
+        <span>© 2026 sawanolin · 无担保 · 可依许可证传播</span>
+        <a href="https://github.com/sawanolin/cryptokit-soft-hsm" target="_blank" rel="noopener noreferrer">获取源代码</a>
+        <a href="/static/LICENSE.txt" target="_blank" rel="noopener noreferrer">GNU AGPL v3.0 only</a>
+      </div>
+      <div class="sidebar-foot">
+        <span id="service-dot" class="dot"></span>
+        <span id="service-label">正在连接服务</span>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div><p class="eyebrow">GMT 0018-2023 软件密码机</p><h1 id="page-title">初始化</h1></div>
+        <button id="logout" class="button ghost" hidden>退出登录</button>
+      </header>
+
+      <div id="notice" role="status" aria-live="polite"></div>
+
+      <section id="initialize-view" class="auth-layout" hidden>
+        <div class="auth-copy">
+          <span class="tag">首次运行</span>
+          <h2>建立可信管理边界</h2>
+          <p>初始化只创建设备身份、不可更改的设备完整性密钥和首个超级管理员。业务密钥由安全管理员登录后生成。</p>
+          <div class="security-note"><strong>网络管理</strong><span>管理页面监听 0.0.0.0:18080；仅应在可信网络或防火墙限制下开放。</span></div>
+        </div>
+        <form id="initialize-form" class="panel form-grid">
+          <h2>设备初始化与超级管理员</h2>
+          <label>管理员用户名<input name="username" value="admin" required minlength="3" maxlength="32"></label>
+          <label>管理员密码<input name="password" type="password" required minlength="10" autocomplete="new-password"></label>
+          <div class="split">
+            <label>厂商标识<input name="vendor" value="SDFX Project" required maxlength="40"></label>
+            <label>设备名称<input name="device_name" value="SDFX-1.0" required maxlength="16"></label>
+          </div>
+          <label>设备序列号<input name="serial" value="SW000001" required maxlength="16"></label>
+
+          <button class="button primary" type="submit">初始化密码设备</button>
+        </form>
+      </section>
+
+      <section id="login-view" class="auth-layout compact" hidden>
+        <div class="auth-copy"><span class="tag">安全登录</span><h2>管理密码设备</h2><p>登录会话采用 HttpOnly 严格 Cookie，所有变更操作均执行 CSRF 校验并记录审计事件。</p></div>
+        <form id="login-form" class="panel form-grid">
+          <h2>管理员登录</h2>
+          <label>用户名<input name="username" required autocomplete="username"></label>
+          <label>密码<input name="password" type="password" required autocomplete="current-password"></label>
+          <button class="button primary" type="submit">登录</button>
+        </form>
+      </section>
+
+      <section id="app-view" hidden>
+        <div id="page-dashboard" class="page">
+          <div class="metric-grid">
+            <article class="metric"><span>服务状态</span><strong id="metric-status">—</strong><small>密码服务与管理端</small></article>
+            <article class="metric"><span>内部密钥</span><strong id="metric-keys">—</strong><small>SM2 签名 / 加密</small></article>
+            <article class="metric"><span>活动会话</span><strong id="metric-sessions">—</strong><small>当前 SDF 会话</small></article>
+            <article class="metric"><span>累计请求</span><strong id="metric-requests">—</strong><small>本次服务启动</small></article>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><p class="eyebrow">设备身份</p><h2 id="device-heading">—</h2></div><span class="status ok">运行中</span></div>
+            <dl class="detail-grid">
+              <div><dt>厂商</dt><dd id="summary-vendor">—</dd></div>
+              <div><dt>序列号</dt><dd id="summary-serial">—</dd></div>
+              <div><dt>协议</dt><dd>SDFX v2 / TCP 18081</dd></div>
+              <div><dt>管理端</dt><dd>Web / 18080</dd></div>
+            </dl>
+          </div>
+        </div>
+
+        <div id="page-administrators" class="page" hidden>
+          <div class="page-actions"><div><p class="eyebrow">基于角色的访问控制</p><h2>管理员管理</h2></div><button id="open-admin-dialog" class="button primary">创建管理员</button></div>
+          <div class="panel table-wrap"><table><thead><tr><th>用户名</th><th>角色</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="admin-rows"></tbody></table></div>
+        </div>
+
+        <div id="page-keys" class="page" hidden>
+          <div class="page-actions"><div><p class="eyebrow">受保护对象</p><h2>RSA / SM2 密钥</h2></div><button id="open-key-dialog" class="button primary">生成密钥</button></div>
+          <div class="panel table-wrap"><table><thead><tr><th>用途</th><th>索引</th><th>算法</th><th>状态</th><th>完整性</th><th>指纹</th><th>操作</th></tr></thead><tbody id="key-rows"></tbody></table></div>
+          <div class="page-actions subsection"><div><p class="eyebrow">会话密钥封装</p><h2>对称密钥</h2></div><button id="open-kek-dialog" class="button primary">生成对称密钥</button></div>
+          <div class="panel table-wrap"><table><thead><tr><th>用途</th><th>索引</th><th>算法</th><th>状态</th><th>完整性</th><th>指纹</th><th>操作</th></tr></thead><tbody id="kek-rows"></tbody></table></div>
+        </div>
+
+        <div id="page-device" class="page" hidden>
+          <form id="device-form" class="panel form-grid narrow">
+            <div><p class="eyebrow">公开设备属性</p><h2>设备信息</h2></div>
+            <label>厂商标识<input name="vendor" required maxlength="40"></label>
+            <label>设备名称<input name="device_name" required maxlength="16"></label>
+            <label>设备序列号<input name="serial" required maxlength="16"></label>
+            <button class="button primary" type="submit">保存设备信息</button>
+          </form>
+        </div>
+
+        <div id="page-sessions" class="page" hidden>
+          <div class="page-actions"><div><p class="eyebrow">活动连接</p><h2>SDF 会话</h2></div><button id="refresh-sessions" class="button ghost">刷新</button></div>
+          <div class="panel table-wrap"><table><thead><tr><th>会话编号</th><th>设备编号</th><th>建立时间</th><th>最近活动</th><th>状态</th><th>操作</th></tr></thead><tbody id="session-rows"></tbody></table></div>
+        </div>
+
+        <div id="page-testing" class="page" hidden>
+          <div class="panel form-grid narrow">
+            <div><p class="eyebrow">在线诊断</p><h2>密码算法自检</h2></div>
+            <p class="muted">由密码服务真实执行随机数、SM3 已知向量、SM4 加解密回环和 SM2 临时密钥签名验签；不读取内部私钥。</p>
+            <button id="run-selftest" class="button primary">执行全部自检</button>
+            <pre id="selftest-output">等待执行</pre>
+            <p class="muted">也可单独检查 SDF 设备／会话／随机数远程调用链。</p>
+            <label>生成字节数<input id="random-length" type="number" min="1" max="1024" value="32"></label>
+            <button id="run-random" class="button primary">执行自检</button>
+            <pre id="random-output">等待执行</pre>
+          </div>
+        </div>
+
+        <div id="page-maintenance" class="page" hidden>
+          <div class="page-actions"><div><p class="eyebrow">设备维护</p><h2>备份与恢复</h2></div><div class="actions"><label class="button ghost upload-button">上传备份<input id="backup-upload" type="file" accept=".sdfxbak,application/octet-stream" hidden></label><button id="create-backup" class="button primary">创建备份</button></div></div>
+          <p class="muted">备份包由密码服务生成并校验。创建和恢复前必须不存在活动 SDF 会话。</p>
+          <div class="panel table-wrap"><table><thead><tr><th>备份编号</th><th>创建时间</th><th>大小</th><th>操作</th></tr></thead><tbody id="backup-rows"></tbody></table></div>
+          <div class="panel danger-zone"><div><p class="eyebrow">危险操作</p><h2>完全重置设备</h2><p class="danger-copy">删除所有内部密钥、对称密钥、用户文件、管理员认证和设备状态。备份文件保留，审计日志不保留。</p></div><button id="open-reset-dialog" class="button danger">重置设备</button></div>
+        </div>
+
+        <div id="page-audit" class="page" hidden>
+          <div class="page-actions"><div><p class="eyebrow">安全事件</p><h2>审计日志</h2></div><div class="actions"><button id="export-audit" class="button ghost">导出 TXT</button><button id="refresh-audit" class="button ghost">刷新</button></div></div>
+          <form id="audit-settings-form" class="panel form-grid compact">
+            <label>日志保留天数<input name="retention_days" type="number" min="1" max="3650" required></label>
+            <label>最低显示/导出级别<select name="display_level"><option value="DEBUG">DEBUG</option><option value="INFO">INFO</option><option value="WARN">WARN</option><option value="ERROR">ERROR</option></select></label>
+            <div class="form-actions"><button class="button primary" type="submit">保存日志配置</button></div>
+          </form>
+          <div class="panel table-wrap"><table><thead><tr><th>时间</th><th>级别</th><th>分类</th><th>管理员</th><th>操作</th><th>目标</th><th>结果</th><th>来源</th><th>详情</th></tr></thead><tbody id="audit-rows"></tbody></table></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="key-dialog">
+    <form id="key-form" class="form-grid">
+      <div class="dialog-head"><h2>生成内部密钥</h2><button type="button" class="icon-button" data-close>×</button></div>
+            <label>密钥算法<select name="algorithm"><option value="SM2">SM2</option><option value="RSA">RSA</option></select></label>
+      <label>密钥用途<select name="type"><option value="sign">签名</option><option value="enc">加密</option></select></label>
+      <label>密钥长度（位）<input name="bits" type="number" value="256" min="256" max="256" step="256" required></label>
+      <label>密钥索引<input name="index" type="number" min="1" max="1024" required></label>
+      <label>私钥访问控制码（可选）<input name="password" type="password" minlength="8" autocomplete="new-password" placeholder="留空表示不使用口令"></label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button primary" type="submit">生成</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="session-dialog">
+    <form id="session-form" class="form-grid">
+      <div class="dialog-head"><h2>终止 SDF 会话</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <p class="danger-copy">终止后，客户端在该会话上的后续调用将失败。请输入管理员密码和 TERMINATE 确认。</p>
+      <input name="session_id" type="hidden">
+      <label>管理员密码<input name="password" type="password" required autocomplete="current-password"></label>
+      <label>确认文字<input name="confirmation" required pattern="TERMINATE"></label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button danger" type="submit">终止会话</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="password-dialog">
+    <form id="password-form" class="form-grid">
+      <div class="dialog-head"><h2>修改密钥口令</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <input name="algorithm" type="hidden"><input name="key_type" type="hidden"><input name="index" type="hidden">
+      <label>当前访问控制码（无口令时留空）<input name="old_password" type="password" autocomplete="current-password"></label>
+      <label>新访问控制码（留空改为无口令）<input name="new_password" type="password" minlength="8" autocomplete="new-password"></label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button primary" type="submit">修改口令</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="delete-dialog">
+    <form id="delete-form" class="form-grid">
+      <div class="dialog-head"><h2>删除内部密钥</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <p class="danger-copy">此操作不可恢复。请输入管理员密码，并输入 DELETE 确认。</p>
+      <input name="algorithm" type="hidden"><input name="key_type" type="hidden"><input name="index" type="hidden">
+      <label>管理员密码<input name="password" type="password" required autocomplete="current-password"></label>
+      <label>确认文字<input name="confirmation" required pattern="DELETE"></label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button danger" type="submit">永久删除</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="kek-dialog">
+    <form id="kek-form" class="form-grid">
+      <div class="dialog-head"><h2>生成对称密钥</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <p class="muted">生成 128 位 SM4 对称密钥。密钥材料不会通过管理端导出。</p>
+      <label>对称密钥索引<input name="index" type="number" min="1" max="1024" required></label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button primary" type="submit">生成</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="kek-delete-dialog">
+    <form id="kek-delete-form" class="form-grid">
+      <div class="dialog-head"><h2>删除对称密钥</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <p class="danger-copy">删除后，使用该对称密钥封装的数据将无法恢复。请输入管理员密码和 DELETE 确认。</p>
+      <input name="index" type="hidden">
+      <label>管理员密码<input name="password" type="password" required autocomplete="current-password"></label>
+      <label>确认文字<input name="confirmation" required pattern="DELETE"></label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button danger" type="submit">永久删除</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="backup-restore-dialog">
+    <form id="backup-restore-form" class="form-grid">
+      <div class="dialog-head"><h2>恢复备份</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <p class="danger-copy">当前密钥、文件、认证和设备状态会被备份内容替换。请输入管理员密码和 RESTORE 确认。</p>
+      <input name="backup_id" type="hidden">
+      <label>管理员密码<input name="password" type="password" required autocomplete="current-password"></label>
+      <label>确认文字<input name="confirmation" required pattern="RESTORE"></label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button danger" type="submit">恢复备份</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="backup-delete-dialog">
+    <form id="backup-delete-form" class="form-grid">
+      <div class="dialog-head"><h2>删除备份</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <input name="backup_id" type="hidden">
+      <label>管理员密码<input name="password" type="password" required autocomplete="current-password"></label>
+      <label>确认文字<input name="confirmation" required pattern="DELETE"></label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button danger" type="submit">删除备份</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="reset-dialog">
+    <form id="reset-form" class="form-grid">
+      <div class="dialog-head"><h2>完全重置设备</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <p class="danger-copy">此操作不可撤销。备份文件会保留，但设备数据和审计将被删除。</p>
+      <label>管理员密码<input name="password" type="password" required autocomplete="current-password"></label>
+      <label>设备序列号<input name="serial" required></label>
+      <label>确认文字<input name="confirmation" required pattern="RESET DEVICE" placeholder="RESET DEVICE"></label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button danger" type="submit">完全重置</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="reindex-dialog">
+    <form id="reindex-form" class="form-grid">
+      <div class="dialog-head"><h2>修改密钥索引</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <input name="algorithm" type="hidden"><input name="key_type" type="hidden"><input name="old_index" type="hidden">
+      <label>新索引号<input name="new_index" type="number" min="1" max="1024" required></label>
+      <p class="muted">索引参与 HMAC-SM3 完整性保护，修改时会自动重新计算校验值。</p>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button primary" type="submit">修改索引</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="admin-dialog">
+    <form id="admin-form" class="form-grid">
+      <div class="dialog-head"><h2>创建管理员</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <label>用户名<input name="username" required minlength="3" maxlength="32"></label>
+      <label>角色<select name="role"><option value="system_admin">系统管理员</option><option value="security_admin">安全管理员</option><option value="audit_admin">审计管理员</option><option value="super_admin">超级管理员</option></select></label>
+      <label>登录密码<input name="password" type="password" required minlength="10" autocomplete="new-password"></label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button primary" type="submit">创建</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="admin-edit-dialog">
+    <form id="admin-edit-form" class="form-grid">
+      <div class="dialog-head"><h2>配置管理员</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <input name="username" type="hidden">
+      <label>角色<select name="role"><option value="system_admin">系统管理员</option><option value="security_admin">安全管理员</option><option value="audit_admin">审计管理员</option><option value="super_admin">超级管理员</option></select></label>
+      <label>新登录密码（不修改则留空）<input name="password" type="password" minlength="10" autocomplete="new-password"></label>
+      <label class="check"><input name="enabled" type="checkbox"> 启用账户</label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button primary" type="submit">保存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="admin-delete-dialog">
+    <form id="admin-delete-form" class="form-grid">
+      <div class="dialog-head"><h2>删除管理员</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <input name="username" type="hidden">
+      <label>当前超级管理员密码<input name="password" type="password" required autocomplete="current-password"></label>
+      <label>确认文字<input name="confirmation" required pattern="DELETE"></label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button danger" type="submit">删除</button></div>
+    </form>
+  </dialog>
+  <script src="/static/app.js" defer></script>
+  <script src="/static/maintenance.js" defer></script>
+  <script src="/static/keks.js" defer></script>
+  <script src="/static/sessions.js" defer></script>
+</body>
+</html>
+
+
+

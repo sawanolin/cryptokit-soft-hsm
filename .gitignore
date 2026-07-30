@@ -1,0 +1,54 @@
+# Local build output
+/build/
+**/build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+build.ninja
+.ninja_deps
+.ninja_log
+*.obj
+*.o
+*.pdb
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# IDE and operating-system files
+.idea/
+.vscode/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Local secrets and configuration overrides
+.env
+.env.*
+!.env.example
+*.token
+admin.token
+secrets/
+
+# Runtime data, backups, logs and crash output
+data/
+sdfx-data/
+*.sdfxbak
+*.log
+*.pid
+core
+core.*
+coverage/
+
+# Standards material excluded until redistribution rights are confirmed
+/GMT 0018-2023 密码设备应用接口规范.json
+
+# Release staging; checked-in dist/ SDK remains tracked
+/release/
+

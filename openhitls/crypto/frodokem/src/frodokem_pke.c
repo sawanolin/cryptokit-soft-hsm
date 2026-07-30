@@ -1,0 +1,190 @@
+/*
+ * This file is part of the openHiTLS project.
+ *
+ * openHiTLS is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *
+ *     http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
+ */
+
+#include "hitls_build.h"
+#ifdef HITLS_CRYPTO_FRODOKEM
+#include <stdlib.h>
+#include <string.h>
+#include "frodo_local.h"
+#include "bsl_sal.h"
+#include "crypt_errno.h"
+#include "bsl_err_internal.h"
+
+int32_t FrodoPkeKeygenSeeded(const FrodoKemParams *params, uint8_t *pk, uint16_t *matrixSTranspose,
+    const uint8_t *seedA, const uint8_t *seedSE, void *libCtx)
+{
+    const uint16_t n = params->n;
+    const uint16_t nBar = params->nBar;
+    const uint32_t count = (uint32_t)n * nBar;
+    const uint32_t bytesOne = 2 * count;
+    const uint32_t bytesBoth = 2 * bytesOne;
+
+    uint8_t *rAll = (uint8_t *)BSL_SAL_Malloc(bytesBoth);
+    if (rAll == NULL) {
+        BSL_ERR_PUSH_ERROR(CRYPT_MEM_ALLOC_FAIL);
+        return CRYPT_MEM_ALLOC_FAIL;
+    }
+
+    // bit string (r_0, r_1, ..., r_{2*n*nBar-1}) = SHAKE(0x5F || seedSE)
+    int32_t ret = FrodoExpandShakeDs(rAll, bytesBoth, 0x5F, seedSE, params->lenSeedSE, params, libCtx);
+    if (ret != CRYPT_SUCCESS) {
+        BSL_ERR_PUSH_ERROR(ret);
+        BSL_SAL_ClearFree(rAll, bytesBoth);
+        return ret;
+    }
+    // S^T = Sample(r_0, r_1, ..., r_{n*nBar-1})
+    FrodoCommonSampleNFromR(matrixSTranspose, count, params->cdfTable, params->cdfLen, rAll);
+
+    uint16_t *B = (uint16_t *)BSL_SAL_Malloc(bytesOne);
+    if (B == NULL) {
+        BSL_SAL_ClearFree(rAll, bytesBoth);
+        BSL_ERR_PUSH_ERROR(CRYPT_MEM_ALLOC_FAIL);
+        return CRYPT_MEM_ALLOC_FAIL;
+    }
+    // E = Sample(r_{n*nBar}, r_{n*nBar+1}, ..., r_{2*n*nBar-1}) where E is stored in varible B temporarily
+    FrodoCommonSampleNFromR(B, count, params->cdfTable, params->cdfLen, rAll + bytesOne);
+
+    BSL_SAL_ClearFree(rAll, bytesBoth);
+
+    // step 1: A = GenerateA(seedA)
+    // step2: B += A*S, output B = A*S + E
+    ret = FrodoCommonMulAddAsPlusEPortable(B, matrixSTranspose, seedA, params, libCtx);
+    if (ret != CRYPT_SUCCESS) {
+        BSL_ERR_PUSH_ERROR(ret);
+        BSL_SAL_ClearFree(B, bytesOne);
+        return ret;
+    }
+
+    memcpy(pk, seedA, params->lenSeedA);
+    FrodoCommonPack(pk + params->lenSeedA, params->pkSize - params->lenSeedA, B, count, params->logq);
+    BSL_SAL_ClearFree(B, bytesOne);
+    return CRYPT_SUCCESS;
+}
+
+int32_t FrodoPkeEncrypt(const FrodoKemParams *params, const uint8_t *pk, const uint8_t *mu, const uint8_t *seedSEp,
+    uint8_t *ct, void *libCtx)
+{
+    const uint16_t n = params->n;
+    const uint16_t nBar = params->nBar;
+    const uint16_t qMask = (uint16_t)((1u << params->logq) - 1u);
+
+    const uint8_t *pkSeedA = pk;
+    const uint8_t *pkB = pk + params->lenSeedA;
+    const uint32_t lenC1 = ((uint32_t)n * nBar * params->logq) / 8;
+    const uint32_t lenC2 = ((uint32_t)nBar * nBar * params->logq) / 8;
+    uint8_t *ctC1 = ct;
+    uint8_t *ctC2 = ct + lenC1;
+
+    const uint32_t cntNNBar = (uint32_t)n * nBar; // n x nBar matrix
+    const uint32_t cntNBarNBar = (uint32_t)nBar * nBar; // nBar x nBar matrix
+    const uint32_t bytesS = 2 * cntNNBar;
+    const uint32_t bytesE = 2 * cntNNBar;
+    const uint32_t bytesEp = 2 * cntNBarNBar;
+    // Ep denotes E', Epp denotes E'', and so on
+    uint8_t *r96 = (uint8_t *)BSL_SAL_Malloc(bytesS + bytesE + bytesEp);
+    if (r96 == NULL) {
+        BSL_ERR_PUSH_ERROR(CRYPT_MEM_ALLOC_FAIL);
+        return CRYPT_MEM_ALLOC_FAIL;
+    }
+    // r96 = SHAKE(0x96 || seedSEp) = (rS, rE, rE')
+    int32_t ret = FrodoExpandShakeDs(r96, bytesS + bytesE + bytesEp, 0x96, seedSEp, params->lenSeedSE, params, libCtx);
+    if (ret != CRYPT_SUCCESS) {
+        BSL_ERR_PUSH_ERROR(ret);
+        BSL_SAL_ClearFree(r96, bytesS + bytesE + bytesEp);
+        return ret;
+    }
+    uint8_t *rS = r96;
+    uint8_t *rE = r96 + bytesS;
+    uint8_t *rEp = r96 + bytesS + bytesE;
+    // Memory layout:
+    // |<-      S^T       -   >|<-      E'             >|<-      E''       ->|<-      B        -  >|
+    // | <-      U          ->|<-      V        ->|<-      M        ->|
+    // |<-      n x nBar     ->|<-      n x nBar     ->|<-   nBar x nBar   ->|<-     n x nBar    ->|
+    // <-     n x nBar    ->|<-  nBar x nBar ->|<-  nBar x nBar   ->|
+    uint16_t *matrixBuf = (uint16_t *)BSL_SAL_Malloc((4 * cntNNBar + 3 * cntNBarNBar) * sizeof(uint16_t));
+    if (matrixBuf == NULL) {
+        BSL_SAL_ClearFree(r96, bytesS + bytesE + bytesEp);
+        BSL_ERR_PUSH_ERROR(CRYPT_MEM_ALLOC_FAIL);
+        return CRYPT_MEM_ALLOC_FAIL;
+    }
+    uint16_t *STp = matrixBuf;
+    uint16_t *Eprime = STp + cntNNBar;
+    uint16_t *Epp = Eprime + cntNNBar;
+    uint16_t *B = Epp + cntNBarNBar;
+    uint16_t *U = B + cntNNBar;
+    uint16_t *V = U + cntNNBar;
+    uint16_t *M = V + cntNBarNBar;
+
+    FrodoCommonSampleNFromR(STp, cntNNBar, params->cdfTable, params->cdfLen, rS);
+    FrodoCommonSampleNFromR(Eprime, cntNNBar, params->cdfTable, params->cdfLen, rE);
+    FrodoCommonSampleNFromR(Epp, cntNBarNBar, params->cdfTable, params->cdfLen, rEp);
+
+    BSL_SAL_ClearFree(r96, bytesS + bytesE + bytesEp);
+    ret = FrodoCommonMulAddSaPlusEPortable(U, STp, Eprime, pkSeedA, params, libCtx);
+    if (ret != CRYPT_SUCCESS) {
+        BSL_ERR_PUSH_ERROR(ret);
+        BSL_SAL_ClearFree(matrixBuf, (4 * cntNNBar + 3 * cntNBarNBar) * sizeof(uint16_t));
+        return ret;
+    }
+    FrodoCommonUnpack(B, (uint32_t)n * nBar, pkB, params->pkSize - params->lenSeedA, params->logq);
+
+    FrodoCommonMulAddSbPlusEPortable(V, STp, B, Epp, params);
+
+    FrodoCommonKeyEncode(M, mu, params);
+    for (uint32_t t = 0; t < cntNBarNBar; t++) {
+        V[t] = ((V[t] + M[t]) & qMask);
+    }
+
+    FrodoCommonPack(ctC1, lenC1, U, (uint32_t)nBar * n, params->logq);
+    FrodoCommonPack(ctC2, lenC2, V, (uint32_t)nBar * nBar, params->logq);
+    BSL_SAL_ClearFree(matrixBuf, (4 * cntNNBar + 3 * cntNBarNBar) * sizeof(uint16_t));
+    return CRYPT_SUCCESS;
+}
+
+int32_t FrodoPkeDecrypt(const FrodoKemParams *params, const uint8_t *pkeSk, const uint8_t *ct, uint8_t *mu)
+{
+    const uint8_t *ctC1 = ct;
+    const uint8_t *ctC2 = ct + (params->n * params->nBar * params->logq) / 8;
+
+    const uint32_t cntNNBar = (uint32_t)params->n * params->nBar; // n x nBar matrix
+    const uint32_t cntNBarNBar = (uint32_t)params->nBar * params->nBar; // nBar x nBar matrix
+    uint16_t *matrixBuf = BSL_SAL_Malloc((2 * cntNNBar + 2 * cntNBarNBar) * sizeof(uint16_t));
+    if (matrixBuf == NULL) {
+        BSL_ERR_PUSH_ERROR(CRYPT_MEM_ALLOC_FAIL);
+        return CRYPT_MEM_ALLOC_FAIL;
+    }
+    // Memory layout:
+    // |<-      B'       -   >|<-      S^T       -   >|<-      C        -    >|<-      M        ->|
+    // |<-     n x nBar    ->|<-     n x nBar    ->|<-    nBar x nBar   ->|<-  nBar x nBar   ->|
+    uint16_t *Bp = matrixBuf;
+    uint16_t *S = Bp + cntNNBar;
+    uint16_t *C = S + cntNNBar;
+    uint16_t *M = C + cntNBarNBar;
+
+    FrodoCommonDecodeLe16(S, pkeSk, cntNNBar);
+
+    FrodoCommonUnpack(Bp, params->nBar * params->n, ctC1, (params->n * params->nBar * params->logq) / 8, params->logq);
+    FrodoCommonUnpack(C, params->nBar * params->nBar, ctC2, (params->nBar * params->nBar * params->logq) / 8,
+                      params->logq);
+
+    FrodoCommonMulBsUsingSt(M, Bp, S, params);
+    FrodoCommonSub(M, C, M, params);
+
+    FrodoCommonKeyDecode(mu, M, params);
+    BSL_SAL_ClearFree(matrixBuf, (2 * cntNNBar + 2 * cntNBarNBar) * sizeof(uint16_t));
+
+    return CRYPT_SUCCESS;
+}
+#endif

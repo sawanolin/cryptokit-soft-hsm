@@ -1,0 +1,22 @@
+# pkg-config template for openHiTLS library
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: openHiTLS  
+Description: openHiTLS Cryptographic Library
+Version: @version@
+URL: https://gitee.com/openeuler/openHiTLS
+
+# Required libraries for basic functionality
+Libs: -L${libdir} -lhitls_crypto -lhitls_bsl
+Libs.private: -lpthread -lm
+
+# Optional libraries (can be added as needed)
+# For TLS support: -lhitls_tls
+# For PKI support: -lhitls_pki  
+# For Auth support: -lhitls_auth
+# For bounds checking: -lboundscheck
+
+Cflags: -I${includedir}

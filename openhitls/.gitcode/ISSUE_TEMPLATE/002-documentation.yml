@@ -1,0 +1,24 @@
+name: Documentation
+description: Report an issue related to https://gitcode.com/openHiTLS/openhitls
+title: "[Doc]: "
+labels: ["documentation"]
+
+body:
+- type: textarea
+  attributes:
+    label: Documentation Issue
+    description: >
+      Describe the documentation issue.
+  validations:
+    required: true
+- type: textarea
+  attributes:
+    label: Improvement Suggestions
+    description: >
+      Suggest improvements, if any.
+- type: textarea
+  attributes:
+    label: Version Information
+    description: If multiple versions are involved, please provide all version numbers.
+  validations:
+    required: true

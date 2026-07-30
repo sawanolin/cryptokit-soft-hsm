@@ -1,0 +1,80 @@
+SDV_BSL_ERR_FUNC_TC001
+SDV_BSL_ERR_FUNC_TC001:
+
+After the stack is not pushed or cleared, call BSL_ERR_GetLastError to query all error stacks.
+SDV_BSL_ERR_STACK_FUNC_TC001:0
+
+After the stack is not pushed or cleared, call BSL_ERR_GetLastError to query all error stacks.
+SDV_BSL_ERR_STACK_FUNC_TC001:1
+
+Testing CMake Compatibility
+SDV_BSL_ERR_COMPATIBILITY_FUNC_TC001:
+
+BSL_ERR_ClearError Interface Test
+SDV_BSL_ERR_STACK_API_TC001:0
+
+BSL_ERR_ClearError Interface Test
+SDV_BSL_ERR_STACK_API_TC001:1
+
+SDV_BSL_ERR_MARK_FUNC_TC001
+SDV_BSL_ERR_MARK_FUNC_TC001:
+
+SDV_BSL_ERR_STRING_FUNC_TC001
+SDV_BSL_ERR_STRING_FUNC_TC001:
+
+AVL LL test
+SDV_BSL_ERR_AVLLL_FUNC_TC001:
+
+AVL LR test
+SDV_BSL_ERR_AVLLR_FUNC_TC001:
+
+AVL RL test
+SDV_BSL_ERR_AVLRL_FUNC_TC001:
+
+BSL_ERR_PeekError and BSL_ERR_PeekLastError Interface Test
+SDV_BSL_ERR_PEEK_FUNC_TC001:
+
+BSL_ERR_GET_LIB Macro Test
+SDV_BSL_ERR_GET_LIB_FUNC_TC001:
+
+Combined Peek Operations and Library Identification Test
+SDV_BSL_ERR_PEEK_COMBINED_TC001:
+
+BSL_ERR_GetErrAll Interface Test
+SDV_BSL_ERR_GET_ERR_ALL_FUNC_TC001:
+
+BSL_ERR_GetErrAll Edge Cases Test
+SDV_BSL_ERR_GET_ERR_ALL_EDGE_TC001:
+
+SDV_HITLS_CERT_ENHENCE_027
+SDV_HITLS_CERT_ENHENCE_027:
+ 
+SDV_HITLS_CERT_ENHENCE_028
+SDV_HITLS_CERT_ENHENCE_028:
+
+SDV_BSL_ERR_OUTPUT_TC001 19
+SDV_BSL_ERR_OUTPUT_TC001:19:"errOutPut19":"../testdata/bsl/errOutPut19"
+
+SDV_BSL_ERR_OUTPUT_TC001 30
+SDV_BSL_ERR_OUTPUT_TC001:30:"errOutPut30":"../testdata/bsl/errOutPut30"
+
+SDV_BSL_ERR_OUTPUT_TC001 40
+SDV_BSL_ERR_OUTPUT_TC001:40:"errOutPut40":"../testdata/bsl/errOutPut40"
+
+SDV_BSL_ERR_OUTPUT_TC001 57
+SDV_BSL_ERR_OUTPUT_TC001:57:"errOutPut57":"../testdata/bsl/errOutPut57"
+
+SDV_BSL_ERR_OUTPUT_TC002 10+10
+SDV_BSL_ERR_OUTPUT_TC002:10:10:"errOutPut10+10":"../testdata/bsl/errOutPut10+10"
+
+SDV_BSL_ERR_OUTPUT_TC002 10+21 overwrite mark
+SDV_BSL_ERR_OUTPUT_TC002:10:21:"errOutPut10+21":"../testdata/bsl/errOutPut10+21"
+
+SDV_BSL_ERR_OUTPUT_TC003 40 then pop from firstandlast
+SDV_BSL_ERR_OUTPUT_TC003:40:"errOutPut40pop":"../testdata/bsl/errOutPut40pop"
+
+SDV_BSL_ERR_OUTPUT_TC004 errOutPut But No Err
+SDV_BSL_ERR_OUTPUT_TC004:"errOutPutNA":"../testdata/bsl/errOutPutNA"
+
+SDV_BSL_ERR_OUTPUT_TC005 reentrant output callback
+SDV_BSL_ERR_OUTPUT_TC005:
