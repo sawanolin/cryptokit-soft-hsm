@@ -110,6 +110,7 @@ extern "C" {
 #define SDFX_CMD_INTERNAL_PRIVATE_RSA      0x0089
 #define SDFX_CMD_GENERATE_KEYPAIR_RSA      0x008A
 #define SDFX_CMD_EXTERNAL_PRIVATE_RSA      0x008B
+#define SDFX_CMD_ADMIN_KEK_VERIFY          0x008C
 
 /*
  * Wire structures are packed deliberately. All multi-byte scalar values are

@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -179,41 +180,7 @@ void session_objects_cleanup(session_info_t *session)
 }
 
 static int kek_is_disabled(uint32_t index);
-
-static int load_kek(uint32_t index, BYTE kek[16])
-{
-    if (index == 0 || index > 1024 || kek == NULL) {
-        return SDR_KEYNOTEXIST;
-    }
-    if (ensure_storage_tree() != SDR_OK) {
-        return SDR_FILEWERR;
-    }
-    char path[512];
-    int n = snprintf(path, sizeof(path), "%s/keys/kek/%08u.bin", storage_root(), index);
-    if (n <= 0 || (size_t)n >= sizeof(path)) {
-        return SDR_FILEWERR;
-    }
-    pthread_mutex_lock(&g_storage_mutex);
-    if (kek_is_disabled(index)) {
-        pthread_mutex_unlock(&g_storage_mutex);
-        return SDR_KEYNOTEXIST;
-    }
-    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-    if (fd < 0) {
-        pthread_mutex_unlock(&g_storage_mutex);
-        return errno == ENOENT ? SDR_KEYNOTEXIST : SDR_KEYERR;
-    }
-    ssize_t got = read(fd, kek, 16);
-    BYTE trailing = 0;
-    ssize_t extra = read(fd, &trailing, 1);
-    close(fd);
-    pthread_mutex_unlock(&g_storage_mutex);
-    if (got != 16 || extra != 0) {
-        secure_clear(kek, 16);
-        return SDR_KEYERR;
-    }
-    return SDR_OK;
-}
+static int load_kek(uint32_t index, BYTE kek[16]);
 
 int kek_generate_wrapped(session_info_t *session, uint32_t key_bits,
                          uint32_t alg_id, uint32_t kek_index,
@@ -443,5 +410,3 @@ int user_file_delete(const BYTE *name, uint32_t name_len)
 
 #include "kek_admin.inc"
 #include "backup_admin.inc"
-
-

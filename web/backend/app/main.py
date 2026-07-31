@@ -77,6 +77,7 @@ CMD_ADMIN_RSA_KEY_PUBLIC = 0x007E
 CMD_ADMIN_RSA_KEY_PASSWORD = 0x007F
 CMD_ADMIN_RSA_KEY_VERIFY = 0x0080
 CMD_ADMIN_RSA_KEY_REINDEX = 0x0081
+CMD_ADMIN_KEK_VERIFY = 0x008C
 
 KEY_TYPES = {"sign": 1, "enc": 2}
 ROLES = {"super_admin", "system_admin", "security_admin", "audit_admin"}
@@ -973,6 +974,30 @@ def disable_kek(
     audit(request, session["username"], "disable", f"kek:{index}", "success")
     return {"enabled": False}
 
+@app.post("/api/keks/{index}/verify")
+def verify_kek_integrity(
+    index: int,
+    request: Request,
+    session: dict[str, Any] = Depends(require_roles("security_admin", csrf=True)),
+) -> dict[str, Any]:
+    if not 1 <= index <= 1024:
+        raise HTTPException(422, "对称密钥索引必须为 1–1024")
+    try:
+        result = json.loads(protocol.admin(CMD_ADMIN_KEK_VERIFY, (index, 0, 0, 0)))
+    except DaemonError as error:
+        if error.status != SDR_KEYERR:
+            raise
+        result = {
+            "type": "kek", "index": index, "algorithm": "HMAC-SM3",
+            "key_algorithm": "SM4", "valid": False,
+        }
+    audit(
+        request, session["username"], "integrity_verify", f"kek:{index}",
+        "success" if result.get("valid") else "failure", category="key",
+        level="INFO" if result.get("valid") else "ERROR",
+    )
+    return result
+
 
 @app.post("/api/keys", status_code=201)
 def create_key(
@@ -1373,4 +1398,3 @@ def index() -> FileResponse:
 
 
 app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
-

@@ -83,6 +83,8 @@ def main() -> None:
     keks = call("/api/keks")
     assert len(keks) == 1 and keks[0]["index"] == 1 and keks[0]["enabled"] is True
     assert len(keks[0]["fingerprint"]) == 64
+    assert keks[0]["integrity"] is True
+    assert call("/api/keks/1/verify", "POST", {}, csrf)["valid"] is True
     call("/api/keks/1/disable", "POST", {}, csrf)
     assert call("/api/keks")[0]["enabled"] is False
     call("/api/keks/1/enable", "POST", {}, csrf)

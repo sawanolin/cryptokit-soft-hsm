@@ -57,7 +57,7 @@ cl /nologo /W4 /utf-8 /Iinclude examples\basic_test.c ^
 - 对称包装密钥（标准接口名称保留 KEK）；
 - 用户文件接口。
 
-私钥访问控制码允许长度为 0。空口令密钥不要求调用 `SDF_GetPrivateKeyAccessRight`，但服务端私钥仍为加密保存。设置了口令的内部密钥必须先取得会话级访问权。签名与加密密钥索引可以不同，应以 Web 安全管理员配置的实际索引为准。
+私钥访问控制码允许长度为 0。空口令密钥不要求调用 `SDF_GetPrivateKeyAccessRight`，但服务端私钥仍为加密保存。设置了口令的内部密钥必须先取得会话级访问权。签名与加密密钥索引可以不同，应以 Web 安全管理员配置的实际索引为准。服务端对持久化 SM2/RSA 非对称密钥和 SM4 对称密钥记录及其索引统一执行 HMAC-SM3 完整性校验，受损记录不会用于密码运算。
 
 未实现的公开声明明确返回 `SDR_NOTSUPPORT`，不会伪造成功。
 
@@ -82,4 +82,3 @@ Get-FileHash -Algorithm SHA256 .\bin\sdfapi_x64.dll
 ## 许可证
 
 CryptoKit SoftHSM 原创代码与修改采用 GNU AGPL v3.0 only（`AGPL-3.0-only`），对应源码位于 <https://github.com/sawanolin/cryptokit-soft-hsm>。SDK 包内 `licenses/` 目录包含完整 AGPL 正文以及 SDFX、openHiTLS 原许可证和归属声明。重新分发 DLL、导入库、头文件或示例时必须同时保留该目录；上游材料仍适用其原许可证。
-

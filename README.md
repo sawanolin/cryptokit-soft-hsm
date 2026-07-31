@@ -76,7 +76,12 @@ docker run -d `
   sawanolin/cryptokit-soft-hsm:1.0.0
 ```
 
+<<<<<<< HEAD
 访问 `http://服务器IP:18080`，然后完成首次初始化。
+=======
+电脑访问 `http://服务器IP:18080`，然后完成首次初始化。
+
+> > > > > > > 29a97ed (修复bug)
 
 ### 从源码构建
 
@@ -118,7 +123,6 @@ docker compose down -v
 
 ## 端口与持久化
 
-
 | 项目     |          默认值 | 用途                                                 |
 | -------- | --------------: | ---------------------------------------------------- |
 | SDF TCP  |      `ip:18081` | Linux/Windows SDF SDK 调用                           |
@@ -155,14 +159,13 @@ SHA256SUMS
 
 ## 已实现接口概览
 
-
 | 分类         | 已实现                                               |
 | ------------ | ---------------------------------------------------- |
 | 设备与会话   | Open/Close Device、Open/Close Session、GetDeviceInfo |
 | 随机数       | GenerateRandom                                       |
 | SM3          | HashInit、HashUpdate、HashFinal                      |
 | SM2 外部运算 | 密钥生成、加解密、签名、验签                         |
-| RSA 运算     | 1024–2048 位密钥生成、内外部公私钥运算、IPK/EPK/ISK |
+| RSA 运算     | 1024–2048 位密钥生成、内外部公私钥运算、IPK/EPK/ISK  |
 | 内部密钥     | SM2/RSA 公钥导出、权限获取/释放和内部密码运算        |
 | 会话密钥     | SM2/RSA IPK/EPK/ISK、对称密钥包装/导入、DestroyKey   |
 | SM4          | ECB、CBC、CFB、OFB、CTR、CBC-MAC                     |
@@ -178,16 +181,16 @@ Web 管理端提供：
 
 - 设备状态、活动会话和累计请求；
 - 设备信息修改；
-- SM2/RSA 签名与加密密钥生成、启停、删除、公钥导出、口令修改和索引修改；
-- 私钥访问控制码可为空；密钥记录与索引一起用 HMAC-SM3 完整性保护，并提供校验按钮；
-- 对称密钥生成、启停和删除，不提供密钥明文导出；
+- “非对称密钥”区提供 SM2/RSA 签名与加密密钥生成、启停、删除、导出公钥、口令修改和索引修改；
+- 私钥访问控制码可为空；SM2/RSA 密钥记录与索引一起用 HMAC-SM3 完整性保护；
+- “对称密钥”区提供 SM4 对称密钥生成、启停和删除；记录与索引同样使用 HMAC-SM3 完整性保护，不提供密钥明文导出；
+- 非对称密钥和对称密钥均提供显式完整性校验按钮；
 - SDF 会话查看和强制终止；
 - 随机数、SM3、SM4、SM2、RSA 在线自检；
 - 带级别、分类、请求号、来源地址和详情的管理审计，可配置保留期/显示级别并导出 TXT；
 - 备份、恢复、上传、下载和完全重置。
 
 权限边界：
-
 
 | 功能                         | 超级管理员 | 系统管理员 | 安全管理员 | 审计管理员 |
 | ---------------------------- | :--------: | :--------: | :--------: | :--------: |
@@ -226,7 +229,7 @@ Issue；请通过仓库维护者公布的私密安全报告渠道联系。
 构建正式镜像：
 
 ```bash
-docker build --pull -t cryptokit-soft-hsm:1.0.0 .
+docker build --pull -t cryptokit-soft-hsm:1.0.1 .
 ```
 
 运行 Web 端到端测试：
@@ -242,7 +245,7 @@ python tests/rbac_integrity_e2e.py --base-url http://127.0.0.1:28080
 当前发布门禁包括：
 
 - Linux C SDK CTest：6/6；
-- Web 初始化、四角色 RBAC、CSRF、SM2/RSA/对称密钥、改索引、HMAC-SM3 校验和审计；
+- Web 初始化、四角色 RBAC、CSRF、SM2/RSA/对称密钥、改索引、全部持久化密钥的 HMAC-SM3 校验和审计；
 - 随机数/SM3/SM4/SM2/RSA 自检、备份恢复与完全重置；
 - Windows x64 DLL 的 94 个公开 SDF 导出；
 - Windows `test1` 的 SM2 封装回环及 RSA 内外部/会话密钥封装真实连接。
@@ -306,4 +309,3 @@ Docker 镜像和 Windows SDK 也随附上述授权材料。上游来源、修改
 - [openHiTLS](https://gitcode.com/openHiTLS/openHiTLS)
 - SDFX 原始项目及贡献者
 - GM/T 0018-2023 密码设备应用接口规范
-

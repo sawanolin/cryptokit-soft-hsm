@@ -155,6 +155,9 @@ int crypto_symmetric_encrypt(ULONG alg_id, const BYTE *key, ULONG key_len,
                             const BYTE *iv, ULONG iv_len,
                             const BYTE *plaintext, ULONG plaintext_len,
                             BYTE *ciphertext, ULONG *ciphertext_len);
+/* Device-rooted record integrity shared by persistent key managers. */
+int device_integrity_hmac(const BYTE *data, uint32_t data_len, BYTE output[32]);
+
 /* Session key and persistent user-file management. */
 int session_key_create(session_info_t *session, const BYTE *key, uint32_t key_len,
                        uint64_t *key_id);
@@ -173,6 +176,7 @@ int kek_admin_create(uint32_t index);
 int kek_admin_delete(uint32_t index);
 int kek_admin_set_enabled(uint32_t index, bool enabled);
 int kek_admin_list(BYTE *output, uint32_t *output_len, uint32_t *key_count);
+int kek_admin_verify(uint32_t index);
 int backup_admin_create(daemon_context_t *ctx, const BYTE *id, uint32_t id_len);
 int backup_admin_list(BYTE *output, uint32_t *output_len);
 int backup_admin_delete(const BYTE *id, uint32_t id_len);
@@ -302,4 +306,3 @@ void crypto_sm2_cleanup_contexts(void);
 #endif
 
 #endif /* DAEMON_INTERNAL_H */
-

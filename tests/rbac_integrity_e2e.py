@@ -80,6 +80,9 @@ def main():
     }
     assert security.call("/api/keys/sign/8/verify?algorithm=RSA", "POST", {})["valid"] is True
     security.call("/api/keks", "POST", {"index": 1}, expected=201)
+    keks = security.call("/api/keks")
+    assert len(keks) == 1 and keks[0]["integrity"] is True
+    assert security.call("/api/keks/1/verify", "POST", {})["valid"] is True
     selftest = security.call("/api/crypto/selftest", "POST", {})
     assert selftest["status"] == "passed" and selftest["rsa"]["status"] == "passed"
     security.call("/api/audit", expected=403)

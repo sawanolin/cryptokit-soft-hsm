@@ -32,6 +32,44 @@ function formJson(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
+async function copyText(text) {
+  const value = String(text ?? "");
+  if (window.isSecureContext && typeof navigator.clipboard?.writeText === "function") {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch (_) {
+      // Continue with the HTTP-compatible fallback below.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.readOnly = true;
+  textarea.setAttribute("aria-hidden", "true");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.opacity = "0";
+  document.body.append(textarea);
+
+  let copied = false;
+  try {
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, value.length);
+    copied = typeof document.execCommand === "function" && document.execCommand("copy");
+  } catch (_) {
+    copied = false;
+  } finally {
+    textarea.remove();
+  }
+
+  if (!copied) {
+    window.prompt("浏览器禁止自动访问剪贴板，请手动复制公钥 Base64：", value);
+  }
+  return copied;
+}
+
 function showMode(mode) {
   $("#initialize-view").hidden = mode !== "initialize";
   $("#login-view").hidden = mode !== "login";
@@ -140,8 +178,12 @@ async function loadKeys() {
         try { await api(`/api/keys/${key.type}/${key.index}/${key.enabled ? "disable" : "enable"}${algorithmQuery}`, { method: "POST", body: "{}" }); await loadKeys(); }
         catch (error) { notice(error.message, true); }
       }));
-      actions.append(actionButton("公钥", "", async () => {
-        try { const result = await api(`/api/keys/${key.type}/${key.index}/public${algorithmQuery}`); await navigator.clipboard.writeText(result.data); notice("公钥 Base64 已复制"); }
+      actions.append(actionButton("导出公钥", "", async () => {
+        try {
+          const result = await api(`/api/keys/${key.type}/${key.index}/public${algorithmQuery}`);
+          const copied = await copyText(result.data);
+          notice(copied ? "公钥 Base64 已复制" : "已显示公钥 Base64，请手动复制");
+        }
         catch (error) { notice(error.message, true); }
       }));
       actions.append(actionButton("改口令", "", () => {
@@ -408,4 +450,3 @@ $$("#nav button").forEach((button) => button.addEventListener("click", () => swi
     notice(error.message, true);
   }
 })();
-

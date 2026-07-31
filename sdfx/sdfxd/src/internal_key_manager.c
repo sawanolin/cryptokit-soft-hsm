@@ -178,6 +178,20 @@ static int hmac_sm3(const BYTE key[32], const BYTE *data, size_t data_len, BYTE 
     return ret;
 }
 
+int device_integrity_hmac(const BYTE *data, uint32_t data_len, BYTE output[32])
+{
+    if (data == NULL || data_len == 0 || output == NULL) {
+        return SDR_INARGERR;
+    }
+    BYTE key[32] = {0};
+    int ret = ensure_device_key(key);
+    if (ret == SDR_OK) {
+        ret = hmac_sm3(key, data, data_len, output);
+    }
+    secure_clear(key, sizeof(key));
+    return ret;
+}
+
 static int derive_device_secret(uint32_t type, uint32_t index,
                                 const BYTE salt[16], BYTE derived[32])
 {
@@ -222,18 +236,13 @@ static int internal_key_path(uint32_t type, uint32_t index, char *path, size_t p
 
 static int compute_record_integrity(const internal_key_record_t *record, BYTE output[32])
 {
-    BYTE key[32] = {0};
     BYTE data[offsetof(internal_key_record_t, integrity) + 4];
     memcpy(data, record, offsetof(internal_key_record_t, integrity));
     data[sizeof(data) - 4] = (BYTE)(record->index >> 24);
     data[sizeof(data) - 3] = (BYTE)(record->index >> 16);
     data[sizeof(data) - 2] = (BYTE)(record->index >> 8);
     data[sizeof(data) - 1] = (BYTE)record->index;
-    int ret = ensure_device_key(key);
-    if (ret == SDR_OK) {
-        ret = hmac_sm3(key, data, sizeof(data), output);
-    }
-    secure_clear(key, sizeof(key));
+    int ret = device_integrity_hmac(data, (uint32_t)sizeof(data), output);
     secure_clear(data, sizeof(data));
     return ret;
 }
@@ -726,4 +735,3 @@ int internal_key_import_with_isk(session_info_t *session, uint32_t index,
 
 
 #include "internal_key_admin.inc"
-

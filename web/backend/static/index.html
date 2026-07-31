@@ -98,7 +98,7 @@
         </div>
 
         <div id="page-keys" class="page" hidden>
-          <div class="page-actions"><div><p class="eyebrow">受保护对象</p><h2>RSA / SM2 密钥</h2></div><button id="open-key-dialog" class="button primary">生成密钥</button></div>
+          <div class="page-actions"><div><p class="eyebrow">受保护对象</p><h2>非对称密钥</h2></div><button id="open-key-dialog" class="button primary">生成密钥</button></div>
           <div class="panel table-wrap"><table><thead><tr><th>用途</th><th>索引</th><th>算法</th><th>状态</th><th>完整性</th><th>指纹</th><th>操作</th></tr></thead><tbody id="key-rows"></tbody></table></div>
           <div class="page-actions subsection"><div><p class="eyebrow">会话密钥封装</p><h2>对称密钥</h2></div><button id="open-kek-dialog" class="button primary">生成对称密钥</button></div>
           <div class="panel table-wrap"><table><thead><tr><th>用途</th><th>索引</th><th>算法</th><th>状态</th><th>完整性</th><th>指纹</th><th>操作</th></tr></thead><tbody id="kek-rows"></tbody></table></div>
@@ -199,7 +199,7 @@
   <dialog id="kek-dialog">
     <form id="kek-form" class="form-grid">
       <div class="dialog-head"><h2>生成对称密钥</h2><button type="button" class="icon-button" data-close>×</button></div>
-      <p class="muted">生成 128 位 SM4 对称密钥。密钥材料不会通过管理端导出。</p>
+      <p class="muted">生成 128 位 SM4 对称密钥。密钥记录与索引使用设备根密钥派生的 HMAC-SM3 完整性保护，密钥材料不会通过管理端导出。</p>
       <label>对称密钥索引<input name="index" type="number" min="1" max="1024" required></label>
       <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button primary" type="submit">生成</button></div>
     </form>
@@ -294,6 +294,3 @@
   <script src="/static/sessions.js" defer></script>
 </body>
 </html>
-
-
-

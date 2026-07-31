@@ -35,7 +35,7 @@ The bundled SDFX snapshot has been modified for CryptoKit SoftHSM. Material
 changes include:
 
 - protocol version 2 with fixed-width network fields and opaque remote handles;
-- server-side session keys, persistent symmetric wrapping keys, and protected internal SM2/RSA keys;
+- server-side session keys and HMAC-SM3-protected persistent SM4/SM2/RSA key records;
 - expanded GM/T 0018-style RSA, SM2, SM3, SM4, MAC, session-key, and user-file operations;
 - private token-authenticated commands used by the four-role Web management plane;
 - device-rooted HMAC-SM3 integrity over protected key records and indices;

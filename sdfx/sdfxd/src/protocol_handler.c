@@ -1015,6 +1015,7 @@ static int validate_variable_request(ULONG cmd, const BYTE *data, size_t length)
             case SDFX_CMD_ADMIN_RSA_KEY_PASSWORD:
             case SDFX_CMD_ADMIN_RSA_KEY_VERIFY:
             case SDFX_CMD_ADMIN_RSA_KEY_REINDEX:
+            case SDFX_CMD_ADMIN_KEK_VERIFY:
             base = sizeof(sdfx_blob_req_t);
             if (length >= base) {
                 first = sdfx_ntohl(((const sdfx_blob_req_t *)data)->data_length);
@@ -1200,6 +1201,7 @@ int protocol_handler_process_message(daemon_context_t *ctx,
             case SDFX_CMD_ADMIN_RSA_KEY_PASSWORD:
             case SDFX_CMD_ADMIN_RSA_KEY_VERIFY:
             case SDFX_CMD_ADMIN_RSA_KEY_REINDEX:
+            case SDFX_CMD_ADMIN_KEK_VERIFY:
             resp_data_size = sizeof(sdfx_blob_resp_t) + SDFX_MAX_BLOB_LENGTH;
             break;
         default:
@@ -1412,6 +1414,7 @@ int protocol_handler_process_message(daemon_context_t *ctx,
             case SDFX_CMD_ADMIN_RSA_KEY_PASSWORD:
             case SDFX_CMD_ADMIN_RSA_KEY_VERIFY:
             case SDFX_CMD_ADMIN_RSA_KEY_REINDEX:
+            case SDFX_CMD_ADMIN_KEK_VERIFY:
                 result = handle_admin_command(ctx, cmd,
                     (const sdfx_blob_req_t *)request->data,
                     sdfx_ntohl(request->header.length),
@@ -1422,7 +1425,8 @@ int protocol_handler_process_message(daemon_context_t *ctx,
 
     if ((cmd >= SDFX_CMD_GENERATE_KEY_KEK && cmd <= SDFX_CMD_IMPORT_KEY_ISK_ECC) ||
         (cmd >= SDFX_CMD_EXPORT_SIGN_PUB_RSA && cmd <= SDFX_CMD_EXTERNAL_PRIVATE_RSA) ||
-        (cmd >= SDFX_CMD_ADMIN_STATUS && cmd <= SDFX_CMD_ADMIN_RSA_KEY_REINDEX)) {
+        (cmd >= SDFX_CMD_ADMIN_STATUS && cmd <= SDFX_CMD_ADMIN_RSA_KEY_REINDEX) ||
+        cmd == SDFX_CMD_ADMIN_KEK_VERIFY) {
         sdfx_blob_resp_t *blob = (sdfx_blob_resp_t *)(*response)->data;
         size_t actual = sizeof(*blob) + sdfx_ntohl(blob->data_length);
         if (actual <= resp_data_size) {
@@ -1436,4 +1440,3 @@ int protocol_handler_process_message(daemon_context_t *ctx,
     LOG_DEBUG("Command %lu processed, result = %ld", (unsigned long)cmd, result);
     return result;
 }
-

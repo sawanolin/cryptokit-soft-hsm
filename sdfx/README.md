@@ -47,9 +47,9 @@ SM2 and RSA signing/encryption key pairs are independent and may use different i
 
 A private-key access code may be empty. An empty code means the application does not need to acquire password-based access; it does not mean the private key is stored in plaintext. Password-protected records derive their encryption secret from the access code and random salt. Passwordless records derive it from the device integrity key. Private material is encrypted with SM4-CTR.
 
-Every persistent SM2/RSA record includes its algorithm, purpose, index, public key, encrypted private key, and metadata in an HMAC-SM3 integrity value. The HMAC key is the 32-byte device integrity key created by the Web initialization command. It has no management export or change operation and is removed only by a full device reset. Moving a passwordless record also re-encrypts it for the new index.
+Every persistent SM2/RSA record includes its algorithm, purpose, index, public key, encrypted private key, and metadata in an HMAC-SM3 integrity value. Each persistent SM4 symmetric wrapping-key record likewise protects its record version, algorithm, bit length, index, and key material with HMAC-SM3; legacy raw 16-byte KEK files are migrated when first read. A record that fails verification is rejected before cryptographic use. The HMAC key is the 32-byte device integrity key created by the Web initialization command. It has no management export or change operation and is removed only by a full device reset. Moving a passwordless asymmetric record also re-encrypts it for the new index.
 
-The Web UI calls the symmetric wrapping keys “对称密钥” (symmetric keys). The underlying standard API and internal source identifiers retain the term KEK for compatibility.
+The Web UI separates “非对称密钥” (asymmetric keys) from “对称密钥” (symmetric keys), labels the public-key action “导出公钥”, and provides explicit integrity verification for both record types. The underlying standard API and internal source identifiers retain the term KEK for compatibility.
 
 ## Web management roles
 
@@ -186,4 +186,3 @@ Major declarations still returning `SDR_NOTSUPPORT` include ECC agreement, authe
 ## License
 
 SDFX source retains its existing Mulan PSL v2 notices. CryptoKit SoftHSM original additions and modifications are distributed under GNU AGPL v3.0 only (`AGPL-3.0-only`); the corresponding source is <https://github.com/sawanolin/cryptokit-soft-hsm>. The AGPL does not replace upstream licenses. Redistribution must preserve the repository `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`, `sdfx/LICENSE`, and the bundled openHiTLS license and third-party notice.
-

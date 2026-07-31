@@ -271,6 +271,23 @@ static int handle_admin_command(daemon_context_t *ctx, ULONG cmd,
                 ? kek_admin_set_enabled(p0, cmd == SDFX_CMD_ADMIN_KEK_ENABLE)
                 : SDR_PROTOCOL_ERROR;
             break;
+        case SDFX_CMD_ADMIN_KEK_VERIFY:
+            if (secret_len != 0) {
+                ret = SDR_PROTOCOL_ERROR;
+                break;
+            }
+            ret = kek_admin_verify(p0);
+            if (ret == SDR_OK) {
+                int written = snprintf((char *)resp->data, SDFX_MAX_BLOB_LENGTH,
+                    "{\"type\":\"kek\",\"index\":%u,\"algorithm\":\"HMAC-SM3\","
+                    "\"key_algorithm\":\"SM4\",\"valid\":true}", p0);
+                if (written < 0 || written >= (int)SDFX_MAX_BLOB_LENGTH) {
+                    ret = SDR_NOBUFFER;
+                } else {
+                    output_len = (uint32_t)written;
+                }
+            }
+            break;
         case SDFX_CMD_ADMIN_BACKUP_LIST:
             if (secret_len != 0) {
                 ret = SDR_PROTOCOL_ERROR;
@@ -316,6 +333,3 @@ static int handle_admin_command(daemon_context_t *ctx, ULONG cmd,
     }
     return ret;
 }
-
-
-
