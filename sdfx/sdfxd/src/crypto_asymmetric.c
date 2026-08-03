@@ -161,6 +161,19 @@ static CRYPT_EAL_PkeyCtx *sm2_ctx_from_public(const ECCrefPublicKey *key)
     return ctx;
 }
 
+int crypto_sm2_validate_public_key(const ECCrefPublicKey *public_key)
+{
+    if (ensure_hitls_init() != SDR_OK) {
+        return SDR_KEYERR;
+    }
+    CRYPT_EAL_PkeyCtx *ctx = sm2_ctx_from_public(public_key);
+    if (ctx == NULL) {
+        return SDR_KEYERR;
+    }
+    CRYPT_EAL_PkeyFreeCtx(ctx);
+    return SDR_OK;
+}
+
 static CRYPT_EAL_PkeyCtx *sm2_ctx_from_private(const ECCrefPrivateKey *key)
 {
     if (key == NULL || key->bits != 256) {
@@ -441,26 +454,6 @@ int crypto_sm2_external_decrypt(const ECCrefPrivateKey *private_key,
     *plaintext_len = out_len;
     return SDR_OK;
 }
-/**
- * @brief SM2 internal signature
- */
-int crypto_sm2_internal_sign(ULONG key_index, const BYTE *data, ULONG data_len,
-                             BYTE *signature, ULONG *signature_len)
-{
-    LOG_ERROR("Internal key management not implemented");
-    return SDR_NOTSUPPORT;
-}
-
-/**
- * @brief SM2 internal verification
- */
-int crypto_sm2_internal_verify(ULONG key_index, const BYTE *data, ULONG data_len,
-                               const BYTE *signature, ULONG signature_len)
-{
-    LOG_ERROR("Internal key management not implemented");
-    return SDR_NOTSUPPORT;
-}
-
 /**
  * @brief SM2 external signature (using private key)
  */

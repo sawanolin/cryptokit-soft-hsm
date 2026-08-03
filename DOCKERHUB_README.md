@@ -97,18 +97,21 @@ linux/amd64
 ## 主要功能
 
 - GM/T 0018-2023 风格的设备、会话和设备信息接口；
-- openHiTLS 随机数、SM3、SM2 与 SM4；
+- openHiTLS 随机数、SM3/SHA 摘要及 SM2 消息签名 ZA 预处理；
 - SM2/RSA 外部运算和持久化内部签名/加密密钥；
 - 会话级私钥访问权限；
 - SM2/RSA 和对称密钥（SDF KEK）会话密钥封装；
-- SM4 ECB/CBC/CFB/OFB/CTR 和 CBC-MAC；
+- SM4 ECB/CBC/CFB/OFB/CTR/XTS、GCM/CCM、CBC-MAC 与 HMAC-SM3；
+- 单包和流式对称、MAC/HMAC、可鉴别加解密及外部密钥扩展；
+- SM2 ECC 密钥协商；
+- 附录 C IKE、IPSEC、SSL 普通和 EPK 包装接口；
 - SDF 用户文件；
 - Web 四角色权限、设备、SM2/RSA/对称密钥、会话和审计管理；
 - Web 随机数、SM3、SM4、SM2、RSA 在线自检；
 - 备份、恢复、上传、下载和完全重置。
 
-ECC 协商、认证加密、流式对称/MAC/HMAC、SM9 和 VPN 扩展等尚未
-实现的接口会明确返回 `SDR_NOTSUPPORT`。
+当前仅 SM9 接口未实现并明确返回 `SDR_NOTSUPPORT`。附录 C VPN 派生尚未
+使用 GM/T 0022/0024 权威向量认证，不能据此宣称通过标准检测。
 
 ## Web 角色和密钥保护
 

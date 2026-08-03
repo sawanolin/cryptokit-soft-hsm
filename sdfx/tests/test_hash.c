@@ -16,7 +16,7 @@
 #include "sdf.h"
 
 #define MAX_HASH_LEN 64
-#define TEST_DATA_SIZE 1024
+#define TEST_DATA_SIZE 4096
 
 /* Test data */
 static const BYTE test_data[] = "The quick brown fox jumps over the lazy dog";
@@ -169,7 +169,7 @@ static int test_large_data_hash(HANDLE device_handle, HANDLE session_handle)
     
     /* Process large data in chunks */
     size_t processed = 0;
-    size_t chunk_size = 256;
+    size_t chunk_size = TEST_DATA_SIZE;
     
     printf("Processing %d bytes of data, chunk size: %zu bytes\n", TEST_DATA_SIZE, chunk_size);
     
@@ -205,6 +205,66 @@ static int test_large_data_hash(HANDLE device_handle, HANDLE session_handle)
     return 0;
 }
 
+static int test_sm2_message_preprocess(HANDLE session_handle)
+{
+    static const BYTE public_x[32] = {
+        0x09,0xf9,0xdf,0x31,0x1e,0x54,0x21,0xa1,0x50,0xdd,0x7d,0x16,0x1e,0x4b,0xc5,0xc6,
+        0x72,0x17,0x9f,0xad,0x18,0x33,0xfc,0x07,0x6b,0xb0,0x8f,0xf3,0x56,0xf3,0x50,0x20
+    };
+    static const BYTE public_y[32] = {
+        0xcc,0xea,0x49,0x0c,0xe2,0x67,0x75,0xa5,0x2d,0xc6,0xea,0x71,0x8c,0xc1,0xaa,0x60,
+        0x0a,0xed,0x05,0xfb,0xf3,0x5e,0x08,0x4a,0x66,0x32,0xf6,0x07,0x2d,0xa9,0xad,0x13
+    };
+    static const BYTE expected_digest[32] = {
+        0xf0,0xb4,0x3e,0x94,0xba,0x45,0xac,0xca,0xac,0xe6,0x92,0xed,0x53,0x43,0x82,0xeb,
+        0x17,0xe6,0xab,0x5a,0x19,0xce,0x7b,0x31,0xf4,0x48,0x6f,0xdf,0xc0,0xd2,0x86,0x40
+    };
+    static BYTE identity[] = "1234567812345678";
+    static BYTE message[] = "message digest";
+    ECCrefPublicKey public_key;
+    BYTE digest[MAX_HASH_LEN];
+    ULONG digest_len = sizeof(digest);
+    LONG ret;
+
+    printf("\n=== Testing SM2 message signature preprocessing ===\n");
+    memset(&public_key, 0, sizeof(public_key));
+    public_key.bits = 256;
+    memcpy(public_key.x + ECCref_MAX_LEN - sizeof(public_x), public_x, sizeof(public_x));
+    memcpy(public_key.y + ECCref_MAX_LEN - sizeof(public_y), public_y, sizeof(public_y));
+
+    ret = SDF_HashInit(session_handle, SGD_SM3, &public_key,
+                       identity, sizeof(identity) - 1);
+    if (ret != SDR_OK) {
+        printf("SM2 preprocessing init failed: 0x%lx\n", ret);
+        return -1;
+    }
+    ret = SDF_HashUpdate(session_handle, message, sizeof(message) - 1);
+    if (ret != SDR_OK) {
+        printf("SM2 preprocessing update failed: 0x%lx\n", ret);
+        return -1;
+    }
+    ret = SDF_HashFinal(session_handle, digest, &digest_len);
+    if (ret != SDR_OK || digest_len != sizeof(expected_digest) ||
+        memcmp(digest, expected_digest, sizeof(expected_digest)) != 0) {
+        printf("SM2 preprocessing vector mismatch: 0x%lx\n", ret);
+        print_hex("Calculated result", digest, digest_len);
+        print_hex("Expected result", expected_digest, sizeof(expected_digest));
+        return -1;
+    }
+
+    if (SDF_HashInit(session_handle, SGD_SHA256, &public_key,
+                     identity, sizeof(identity) - 1) != SDR_ALGNOTSUPPORT ||
+        SDF_HashInit(session_handle, SGD_SM3, NULL,
+                     identity, sizeof(identity) - 1) != SDR_INARGERR ||
+        SDF_HashInit(session_handle, SGD_SM3, &public_key,
+                     NULL, sizeof(identity) - 1) != SDR_INARGERR) {
+        printf("SM2 preprocessing argument validation failed\n");
+        return -1;
+    }
+
+    printf("SM2 preprocessing standard vector and error cases passed\n");
+    return 0;
+}
 int main()
 {
     printf("SDFX hash algorithm test\n");
@@ -272,6 +332,10 @@ int main()
     
     /* Test large data processing */
     if (test_large_data_hash(device_handle, session_handle) != 0) {
+        test_result = 1;
+    }
+    /* Test SM2 message signature preprocessing (ZA || message). */
+    if (test_sm2_message_preprocess(session_handle) != 0) {
         test_result = 1;
     }
     

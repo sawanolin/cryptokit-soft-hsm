@@ -111,6 +111,7 @@ extern "C" {
 #define SDFX_CMD_GENERATE_KEYPAIR_RSA      0x008A
 #define SDFX_CMD_EXTERNAL_PRIVATE_RSA      0x008B
 #define SDFX_CMD_ADMIN_KEK_VERIFY          0x008C
+#define SDFX_CMD_EXTENDED_OPERATION         0x0090
 
 /*
  * Wire structures are packed deliberately. All multi-byte scalar values are
@@ -142,6 +143,8 @@ typedef struct sdfx_message {
 
 /* Maximum message size */
 #define SDFX_MAX_MESSAGE_SIZE       (64 * 1024)  /* 64KB */
+/* SM2 ENTL is a 16-bit bit length, so the identity is at most 8191 bytes. */
+#define SDFX_MAX_SM2_ID_LENGTH      8191U
 
 /* Various request/response data structures */
 
@@ -330,7 +333,7 @@ typedef struct sdfx_external_decrypt_ecc_resp {
 /* ECC key pair generate request */
 typedef struct sdfx_generate_keypair_ecc_req {
     sdfx_remote_handle_t session_handle;
-    ULONG alg_id;             /* algorithm ID (SGD_SM2_1) */
+    ULONG alg_id;             /* algorithm ID (SGD_SM2_1/2/3) */
 } sdfx_generate_keypair_ecc_req_t;
 
 /* ECC key pair generate response */
@@ -387,6 +390,49 @@ typedef struct sdfx_blob_resp {
     uint32_t data_length;
     BYTE data[0];
 } sdfx_blob_resp_t;
+/* GM/T 0018-2023 operations added after protocol v2. */
+#define SDFX_EXT_SYM_INIT               1U
+#define SDFX_EXT_SYM_UPDATE             2U
+#define SDFX_EXT_SYM_FINAL              3U
+#define SDFX_EXT_MAC_INIT               4U
+#define SDFX_EXT_MAC_UPDATE             5U
+#define SDFX_EXT_MAC_FINAL              6U
+#define SDFX_EXT_HMAC_INIT              7U
+#define SDFX_EXT_HMAC_UPDATE            8U
+#define SDFX_EXT_HMAC_FINAL             9U
+#define SDFX_EXT_AUTH_ONESHOT          10U
+#define SDFX_EXT_AUTH_INIT             11U
+#define SDFX_EXT_AUTH_UPDATE           12U
+#define SDFX_EXT_AUTH_FINAL            13U
+#define SDFX_EXT_EXTERNAL_CRYPT        14U
+#define SDFX_EXT_EXTERNAL_SYM_INIT     15U
+#define SDFX_EXT_EXTERNAL_HMAC_INIT    16U
+#define SDFX_EXT_AGREEMENT_SPONSOR     20U
+#define SDFX_EXT_AGREEMENT_KEY         21U
+#define SDFX_EXT_AGREEMENT_RESPONSE    22U
+#define SDFX_EXT_VPN_IKE               30U
+#define SDFX_EXT_VPN_IKE_EPK           31U
+#define SDFX_EXT_VPN_IPSEC             32U
+#define SDFX_EXT_VPN_IPSEC_EPK         33U
+#define SDFX_EXT_VPN_SSL               34U
+#define SDFX_EXT_VPN_SSL_EPK           35U
+
+typedef struct sdfx_extended_req {
+    sdfx_remote_handle_t session_handle;
+    sdfx_remote_handle_t object_handle;
+    uint32_t operation;
+    uint32_t alg_id;
+    uint32_t param[8];
+    uint32_t data_length;
+    BYTE data[0];
+} sdfx_extended_req_t;
+
+typedef struct sdfx_extended_resp {
+    sdfx_remote_handle_t object_handle;
+    uint32_t param[8];
+    uint32_t data_length;
+    BYTE data[0];
+} sdfx_extended_resp_t;
 
 #pragma pack(pop)
 
@@ -396,6 +442,10 @@ SDFX_STATIC_ASSERT(sizeof(sdfx_blob_req_t) == 36,
                    "unexpected SDFX blob request size");
 SDFX_STATIC_ASSERT(sizeof(sdfx_blob_resp_t) == 28,
                    "unexpected SDFX blob response size");
+SDFX_STATIC_ASSERT(sizeof(sdfx_extended_req_t) == 60,
+                   "unexpected SDFX extended request size");
+SDFX_STATIC_ASSERT(sizeof(sdfx_extended_resp_t) == 44,
+                   "unexpected SDFX extended response size");
 
 /**
  * @brief Create message

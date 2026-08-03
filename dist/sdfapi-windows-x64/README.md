@@ -50,8 +50,10 @@ cl /nologo /W4 /utf-8 /Iinclude examples\basic_test.c ^
 ## 已实现能力
 
 - 设备、会话、设备信息和随机数；
-- SM3 分段摘要；
-- SM4 ECB/CBC/CFB/OFB/CTR 与 CBC-MAC；
+- SM3、SHA-1/224/256/384/512 分段摘要及 SM2 ZA 消息预处理；
+- SM4 ECB/CBC/CFB/OFB/CTR/XTS、GCM/CCM、CBC-MAC 与 HMAC-SM3；
+- 单包/流式对称、认证、MAC/HMAC 和外部密钥扩展；
+- SM2 ECC 密钥协商和附录 C IKE/IPSEC/SSL 接口；
 - SM2 外部运算、内部签名、内部公钥和 IPK/EPK/ISK；
 - RSA 1024–2048 位密钥生成、内外部公私钥运算和 IPK/EPK/ISK；
 - 对称包装密钥（标准接口名称保留 KEK）；
@@ -59,7 +61,11 @@ cl /nologo /W4 /utf-8 /Iinclude examples\basic_test.c ^
 
 私钥访问控制码允许长度为 0。空口令密钥不要求调用 `SDF_GetPrivateKeyAccessRight`，但服务端私钥仍为加密保存。设置了口令的内部密钥必须先取得会话级访问权。签名与加密密钥索引可以不同，应以 Web 安全管理员配置的实际索引为准。服务端对持久化 SM2/RSA 非对称密钥和 SM4 对称密钥记录及其索引统一执行 HMAC-SM3 完整性校验，受损记录不会用于密码运算。
 
-未实现的公开声明明确返回 `SDR_NOTSUPPORT`，不会伪造成功。
+当前仅 SM9 声明返回 `SDR_NOTSUPPORT`。本目录中的预构建 DLL 必须在发布新版前按当前源码重新生成；只检查导出符号不能证明旧 DLL 已包含新实现。
+
+## 发布前重建
+
+本次新增接口涉及 SDK 源码，不能继续发布旧的 `bin/sdfapi_x64.dll`。应先按仓库发布指南重建 DLL、两个导入库和示例，再更新 `SHA256SUMS`。
 
 ## 验证
 

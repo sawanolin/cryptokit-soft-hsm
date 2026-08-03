@@ -21,7 +21,8 @@
 typedef enum {
     HANDLE_TYPE_DEVICE = 1,
     HANDLE_TYPE_SESSION = 2,
-    HANDLE_TYPE_KEY = 3
+    HANDLE_TYPE_KEY = 3,
+    HANDLE_TYPE_AGREEMENT = 4
 } handle_type_t;
 
 /* Handle information structure */
@@ -264,4 +265,14 @@ HANDLE handle_manager_create_key_with_data(void *key_data)
 int handle_manager_validate_key(HANDLE handle)
 {
     return handle_manager_validate(handle, HANDLE_TYPE_KEY);
+}
+
+HANDLE handle_manager_create_agreement_with_data(void *agreement_data)
+{
+    return handle_manager_create(HANDLE_TYPE_AGREEMENT, agreement_data);
+}
+
+int handle_manager_validate_agreement(HANDLE handle)
+{
+    return handle_manager_validate(handle, HANDLE_TYPE_AGREEMENT);
 }

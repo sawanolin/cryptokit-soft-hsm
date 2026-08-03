@@ -25,22 +25,30 @@ void sdf_hash_cleanup(void)
 LONG SDF_HashInit(HANDLE hSessionHandle, ULONG uiAlgID, 
     ECCrefPublicKey *pucPublicKey, BYTE *pucID, ULONG uiIDLength)
 {
-    BYTE req_buffer[512];  // A sufficiently large buffer for the request
     BYTE resp_buffer[256];
     size_t resp_len;
     sdfx_message_t *resp_msg;
     sdfx_remote_handle_t server_session_id;
-    /* SM2 Z-value preprocessing requires both public key and identity handling.
-     * It is not implemented by the current server and must not be ignored. */
-    if (pucPublicKey != NULL || pucID != NULL || uiIDLength != 0) {
-        return SDR_NOTSUPPORT;
-    }
+    BYTE *req_buffer = NULL;
     LONG ret;
     
     SDF_CHECK_PARAM(hSessionHandle != NULL, SDR_INARGERR);
     
     /* Validate session handle and get server session ID */
     SDF_CHECK_SESSION(hSessionHandle, server_session_id);
+
+    /* GM/T 0018: a non-empty identity requests SM2 Z-value preprocessing. */
+    if (uiIDLength > 0) {
+        SDF_CHECK_PARAM(uiAlgID == SGD_SM3, SDR_ALGNOTSUPPORT);
+        SDF_CHECK_PARAM(pucPublicKey != NULL && pucID != NULL, SDR_INARGERR);
+        SDF_CHECK_PARAM(uiIDLength <= SDFX_MAX_SM2_ID_LENGTH, SDR_INARGERR);
+    }
+
+    size_t req_size = sizeof(sdfx_hash_init_req_t) + uiIDLength;
+    req_buffer = (BYTE *)calloc(1, req_size);
+    if (req_buffer == NULL) {
+        return SDR_NOBUFFER;
+    }
     
     /* Prepare request data */
     sdfx_hash_init_req_t *req = (sdfx_hash_init_req_t*)req_buffer;
@@ -51,68 +59,56 @@ LONG SDF_HashInit(HANDLE hSessionHandle, ULONG uiAlgID,
     /* Copy public key information (if provided) */
     if (pucPublicKey != NULL) {
         memcpy(&req->public_key, pucPublicKey, sizeof(ECCrefPublicKey));
-    } else {
-        memset(&req->public_key, 0, sizeof(ECCrefPublicKey));
     }
     
-    /* Copy ID data (if provided) */
-    size_t req_size = sizeof(sdfx_hash_init_req_t);
-    if (pucID != NULL && uiIDLength > 0) {
-        if (uiIDLength > 256) {  // Prevent buffer overflow
-            return SDR_INARGERR;
-        }
+    if (uiIDLength > 0) {
         memcpy(req->id_data, pucID, uiIDLength);
-        req_size += uiIDLength;
     }
     
-    /* Send request */
     ret = sdf_send_request(SDFX_CMD_HASH_INIT, req, req_size,
-                          resp_buffer, sizeof(resp_buffer), &resp_len);
+                           resp_buffer, sizeof(resp_buffer), &resp_len);
+    free(req_buffer);
     if (ret != SDR_OK) {
         return ret;
     }
     
-    /* Validate response */
     resp_msg = (sdfx_message_t*)resp_buffer;
     return sdfx_ntohl(resp_msg->header.status);
 }
 
 LONG SDF_HashUpdate(HANDLE hSessionHandle, BYTE *pucData, ULONG uiDataLength)
 {
-    BYTE req_buffer[4096];  // A sufficiently large buffer for the data
     BYTE resp_buffer[256];
     size_t resp_len;
     sdfx_message_t *resp_msg;
     sdfx_remote_handle_t server_session_id;
+    BYTE *req_buffer;
     LONG ret;
-    
-    SDF_CHECK_PARAM(hSessionHandle != NULL && pucData != NULL && uiDataLength > 0, SDR_INARGERR);
-    
-    /* Validate session handle and get server session ID */
+
+    SDF_CHECK_PARAM(hSessionHandle != NULL && pucData != NULL &&
+                    uiDataLength > 0 &&
+                    uiDataLength <= SDFX_MAX_BLOB_LENGTH, SDR_INARGERR);
     SDF_CHECK_SESSION(hSessionHandle, server_session_id);
-    
-    /* Check data length limit */
-    if (uiDataLength > 3000) {  // Prevent buffer overflow
-        return SDR_INARGERR;
+
+    size_t req_size = sizeof(sdfx_hash_update_req_t) + uiDataLength;
+    req_buffer = (BYTE *)malloc(req_size);
+    if (req_buffer == NULL) {
+        return SDR_NOBUFFER;
     }
-    
-    /* Prepare request data */
-    sdfx_hash_update_req_t *req = (sdfx_hash_update_req_t*)req_buffer;
+
+    sdfx_hash_update_req_t *req = (sdfx_hash_update_req_t *)req_buffer;
     req->session_handle = sdfx_htonll(server_session_id);
     req->data_length = sdfx_htonl(uiDataLength);
     memcpy(req->data, pucData, uiDataLength);
-    
-    size_t req_size = sizeof(sdfx_hash_update_req_t) + uiDataLength;
-    
-    /* Send request */
+
     ret = sdf_send_request(SDFX_CMD_HASH_UPDATE, req, req_size,
-                          resp_buffer, sizeof(resp_buffer), &resp_len);
+                           resp_buffer, sizeof(resp_buffer), &resp_len);
+    free(req_buffer);
     if (ret != SDR_OK) {
         return ret;
     }
-    
-    /* Validate response */
-    resp_msg = (sdfx_message_t*)resp_buffer;
+
+    resp_msg = (sdfx_message_t *)resp_buffer;
     return sdfx_ntohl(resp_msg->header.status);
 }
 

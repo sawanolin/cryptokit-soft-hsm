@@ -31,15 +31,18 @@ No separate Unix administration listener or management CLI is shipped. The sourc
 | --- | --- |
 | Device/session | Open/close device, open/close session, device information |
 | Random | openHiTLS random generation |
-| SM3 | Incremental HashInit/HashUpdate/HashFinal |
-| SM4 | ECB, CBC, CFB, OFB, CTR, CBC-MAC |
+| Hash | SM3, SHA-1/224/256/384/512, including SM2 ZA message preprocessing |
+| SM4 | ECB, CBC, CFB, OFB, CTR, XTS, GCM, CCM, CBC-MAC, HMAC-SM3; one-shot and streaming |
 | SM2 external | Key generation, encrypt/decrypt, sign/verify |
 | SM2 internal | Sign/encryption public-key export, private access, internal sign/verify, IPK/EPK/ISK session-key wrapping |
 | RSA | 1024–2048-bit key generation, external/internal public/private operations, public-key export, IPK/EPK/ISK session-key wrapping |
 | Symmetric wrapping key | `SDF_GenerateKeyWithKEK`, `SDF_ImportKeyWithKEK`, and session-key destruction |
 | User files | Create, offset read/write, delete |
+| ECC agreement | SM2 sponsor/response flow with static and temporary keys |
+| External-key extensions | One-shot/streaming SM4 and external-key HMAC initialization |
+| Appendix C | IKE, IPSEC, SSL and their external-SM2-public-key wrapped variants |
 
-Unimplemented declarations return `SDR_NOTSUPPORT`; they do not report false success. The authoritative per-interface status is maintained in [`../api-matrix.md`](../api-matrix.md).
+All public GM/T 0018 declarations except SM9 have client, protocol, and daemon implementations. SM9 declarations remain ABI-visible and return `SDR_NOTSUPPORT`. The authoritative per-interface status and validation limits are maintained in [`../api-matrix.md`](../api-matrix.md).
 
 ## Internal keys and integrity
 
@@ -79,6 +82,8 @@ sdfx/
 Important current sources:
 
 - `sdk/src/sdf_rsa.c`: implemented RSA SDF entry points;
+- `sdk/src/sdf_extended.c`, `sdf_agreement.c`, and `sdf_vpn.c`: GM/T 0018 extended client APIs;
+- `sdfxd/src/crypto_extended.c`, `crypto_agreement.c`, and `crypto_vpn.c`: server cryptographic state and derivation;
 - `sdfxd/src/rsa_key_manager.c`: persistent protected RSA keys;
 - `sdfxd/src/internal_key_manager.c`: protected SM2 keys and device integrity key;
 - `sdfxd/src/protocol_handler.c`: standard and private command dispatch;
@@ -157,7 +162,7 @@ export SDFX_TEST_KEY_INDEX=9
 ctest --test-dir build --output-on-failure
 ```
 
-The repository release gate also runs `tests/rbac_integrity_e2e.py`, the Windows `test1.c` SM2 round-trip, `tests/rsa_e2e.c`, and the Windows DLL export checker. Current verified status is 6/6 CTest plus successful Web, SM2, RSA, integrity-tamper, and Windows TCP tests.
+The repository release gate also runs `tests/rbac_integrity_e2e.py`, the Windows `test1.c` SM2 round-trip, `tests/rsa_e2e.c`, and the Windows DLL export checker. Current core verification includes device/session, random, hash/SM2 ZA, SM2, extended SM4/HMAC/AEAD, and all six Appendix C calls. Tests requiring persistent internal keys or KEKs must run against an initialized isolated volume.
 
 ## Logging
 
@@ -181,7 +186,7 @@ Passwords, key material, and protocol payloads are deliberately excluded. Web ma
 
 ## Remaining work
 
-Major declarations still returning `SDR_NOTSUPPORT` include ECC agreement, authenticated encryption, streaming symmetric/MAC/HMAC APIs, external-key extensions, and SM9/VPN extensions. TLS for the SDF channel, certificate management, host network/time management, scheduled tasks, upgrade orchestration, and high availability are also outside the current implementation.
+Only SM9 declarations still return `SDR_NOTSUPPORT`. Remaining assurance work includes authoritative SM2 agreement and GM/T 0022/0024 VPN vectors, fuzzing, and wider interoperability testing. TLS for the SDF channel, certificate management, host network/time management, scheduled tasks, upgrade orchestration, and high availability remain outside the current implementation.
 
 ## License
 

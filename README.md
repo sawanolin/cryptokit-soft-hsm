@@ -17,18 +17,20 @@ Web 管理端，以及通过 TCP 调用服务端的 Windows x64 SDF C SDK。
 ## 主要能力
 
 - 标准 `SDF_*` 设备、会话和设备信息接口；
-- openHiTLS 随机数与 SM3 分段摘要；
+- openHiTLS 随机数、分段摘要和 SM2 消息签名 `ZA` 预处理；
 - SM2 外部密钥生成、加解密、签名和验签；
 - 持久化的 SM2/RSA 内部签名密钥、加密密钥及会话级私钥使用权限；
 - SM2/RSA 和对称密钥（SDF KEK）会话密钥封装、导入与销毁；
-- SM4 ECB、CBC、CFB、OFB、CTR 和 CBC-MAC；
+- SM4 ECB、CBC、CFB、OFB、CTR、XTS、GCM、CCM、CBC-MAC 和 HMAC-SM3；
+- ECC 密钥协商、流式对称/认证/MAC/HMAC 和外部密钥扩展；
+- 附录 C IKE、IPSEC、SSL 普通及 EPK 包装接口；
 - SDF 用户文件创建、偏移读写与删除；
 - Web 四角色权限管理、设备信息、SM2/RSA/对称密钥生命周期、会话管理和审计；
 - Web 随机数、SM3、SM4、SM2、RSA 在线密码自检；
 - 经过格式校验的备份、恢复、上传、下载和完全重置；
 - Windows x64 `sdfapi_x64.dll`、COFF 导入库、头文件和 C 示例。
 
-未实现的接口不会伪造成功，而是明确返回 `SDR_NOTSUPPORT`。完整状态见
+除 SM9 外的公开 GM/T 0018 接口均已实现；SM9 明确返回 `SDR_NOTSUPPORT`。完整状态和验证边界见
 [GM/T 0018-2023 API 实现矩阵](api-matrix.md)。
 
 ## 架构
@@ -64,7 +66,7 @@ sdfapi_x64.dll
 正式镜像发布在 `sawanolin/cryptokit-soft-hsm`：
 
 ```bash
-docker pull sawanolin/cryptokit-soft-hsm:1.0.0
+docker pull sawanolin/cryptokit-soft-hsm:latest
 
 docker run -d `
   --name cryptokit-soft-hsm `
@@ -73,15 +75,10 @@ docker run -d `
   -v cryptokit-sdfx-data:/var/lib/sdfx `
   --restart unless-stopped `
   --security-opt no-new-privileges:true `
-  sawanolin/cryptokit-soft-hsm:1.0.0
+  sawanolin/cryptokit-soft-hsm:latest
 ```
 
-<<<<<<< HEAD
 访问 `http://服务器IP:18080`，然后完成首次初始化。
-=======
-电脑访问 `http://服务器IP:18080`，然后完成首次初始化。
-
-> > > > > > > 29a97ed (修复bug)
 
 ### 从源码构建
 
@@ -163,16 +160,18 @@ SHA256SUMS
 | ------------ | ---------------------------------------------------- |
 | 设备与会话   | Open/Close Device、Open/Close Session、GetDeviceInfo |
 | 随机数       | GenerateRandom                                       |
-| SM3          | HashInit、HashUpdate、HashFinal                      |
-| SM2 外部运算 | 密钥生成、加解密、签名、验签                         |
+| 摘要         | SM3、SHA-1/224/256/384/512；SM2`ZA` 预处理           |
+| SM2 外部运算 | 密钥生成、加解密、32 字节摘要签名和验签              |
 | RSA 运算     | 1024–2048 位密钥生成、内外部公私钥运算、IPK/EPK/ISK  |
 | 内部密钥     | SM2/RSA 公钥导出、权限获取/释放和内部密码运算        |
+| ECC 密钥协商 | 发起、响应和会话密钥生成                             |
 | 会话密钥     | SM2/RSA IPK/EPK/ISK、对称密钥包装/导入、DestroyKey   |
-| SM4          | ECB、CBC、CFB、OFB、CTR、CBC-MAC                     |
+| SM4/扩展     | ECB/CBC/CFB/OFB/CTR/XTS、GCM/CCM、流式 MAC/HMAC      |
+| 附录 C VPN   | IKE、IPSEC、SSL 及三个 EPK 包装接口                  |
 | 用户文件     | Create、Read、Write、Delete                          |
 
-目前尚未实现的主要类别包括 ECC 协商、SM4-GCM 认证加密、流式
-对称运算、流式 MAC/HMAC、外部密钥扩展以及 SM9/VPN 扩展。详见
+当前仅 SM9 接口未实现并返回 `SDR_NOTSUPPORT`。ECC 协商需要安全管理员
+预置内部 SM2 加密密钥；附录 C 尚未使用 GM/T 0022/0024 权威向量认证。详见
 [api-matrix.md](api-matrix.md)。
 
 ## Web 管理
@@ -244,7 +243,7 @@ python tests/rbac_integrity_e2e.py --base-url http://127.0.0.1:28080
 
 当前发布门禁包括：
 
-- Linux C SDK CTest：6/6；
+- Linux C SDK 的设备、随机数、摘要/SM2 预处理、SM2 与 0018 扩展回归通过；
 - Web 初始化、四角色 RBAC、CSRF、SM2/RSA/对称密钥、改索引、全部持久化密钥的 HMAC-SM3 校验和审计；
 - 随机数/SM3/SM4/SM2/RSA 自检、备份恢复与完全重置；
 - Windows x64 DLL 的 94 个公开 SDF 导出；
@@ -282,7 +281,7 @@ python tests/rbac_integrity_e2e.py --base-url http://127.0.0.1:28080
 2. 对新增协议字段进行边界和长度校验；
 3. 不让私钥、对称密钥或会话密钥离开服务端；
 4. 为新增功能补充对应测试；
-5. 保持未实现接口明确返回 `SDR_NOTSUPPORT`；
+5. 保持 SM9 接口明确返回 `SDR_NOTSUPPORT`，不伪造成功；
 6. 保留上游项目的版权、许可证和第三方声明。
 
 ## 许可证与第三方组件

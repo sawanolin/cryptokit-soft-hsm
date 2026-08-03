@@ -12,6 +12,9 @@ add_executable(sdfxd
     src/crypto_random.c
     src/crypto_hash.c
     src/crypto_symmetric.c
+    src/crypto_extended.c
+    src/crypto_agreement.c
+    src/crypto_vpn.c
     src/crypto_asymmetric.c
 )
 

@@ -25,6 +25,8 @@ HANDLE handle_manager_create_device(void);
 HANDLE handle_manager_create_device_with_data(void *device_data);
 HANDLE handle_manager_create_key_with_data(void *key_data);
 int handle_manager_validate_key(HANDLE handle);
+HANDLE handle_manager_create_agreement_with_data(void *agreement_data);
+int handle_manager_validate_agreement(HANDLE handle);
 
 /**
  * @brief Create a session handle

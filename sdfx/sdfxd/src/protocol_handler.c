@@ -23,9 +23,10 @@ static DEVICEINFO g_device_info = {
     .DeviceSerial = "SW000001",
     .DeviceVersion = 0x00010000,
     .StandardVersion = 0x00020023,
-    .AsymAlgAbility = {SGD_SM2_1 | SGD_SM2_3, 256},
+    .AsymAlgAbility = {SGD_SM2_1 | SGD_SM2_2 | SGD_SM2_3, 256},
     .SymAlgAbility = SGD_SM4_ECB | SGD_SM4_CBC | SGD_SM4_CFB |
-                     SGD_SM4_OFB | SGD_SM4_CTR | SGD_SM4_MAC,
+                     SGD_SM4_OFB | SGD_SM4_CTR | SGD_SM4_MAC |
+                     SGD_SM4_GCM | SGD_SM4_CCM | SGD_SM4_XTS,
     .HashAlgAbility = SGD_SM3,
     .BufferSize = 4096
 };
@@ -150,6 +151,7 @@ static int handle_hash_init(daemon_context_t *ctx, const sdfx_hash_init_req_t *r
 {
     uint32_t session_id = (uint32_t)sdfx_ntohll(req->session_handle);
     ULONG alg_id = sdfx_ntohl(req->alg_id);
+    ULONG id_length = sdfx_ntohl(req->id_length);
     
     LOG_DEBUG("Handling hash init request, session_id = %u, alg_id = 0x%lx", 
              session_id, (unsigned long)alg_id);
@@ -164,7 +166,19 @@ static int handle_hash_init(daemon_context_t *ctx, const sdfx_hash_init_req_t *r
         return SDR_SESSION_NOT_EXIST;
     }
     
-    ret = crypto_hash_init(ctx, session, alg_id);
+    if (id_length > 0) {
+        if (alg_id != SGD_SM3) {
+            ret = SDR_ALGNOTSUPPORT;
+        } else if (id_length > SDFX_MAX_SM2_ID_LENGTH) {
+            ret = SDR_INARGERR;
+        } else {
+            ret = crypto_hash_init_sm2_preprocess(ctx, session,
+                                                  &req->public_key,
+                                                  req->id_data, id_length);
+        }
+    } else {
+        ret = crypto_hash_init(ctx, session, alg_id);
+    }
     if (ret != SDR_OK) {
         LOG_ERROR("Failed to initialize hash: %d", ret);
         session_manager_put_session(session);  /* Release session reference */
@@ -437,9 +451,10 @@ static int handle_generate_keypair_ecc(daemon_context_t *ctx,
     
     /* Validate algorithm ID */
     ULONG alg_id = sdfx_ntohl(req->alg_id);
-    if (alg_id != SGD_SM2_1) {
+    if (alg_id != SGD_SM2_1 && alg_id != SGD_SM2_2 &&
+        alg_id != SGD_SM2_3) {
         LOG_ERROR("Unsupported algorithm ID: 0x%lx", alg_id);
-        return SDR_NOTSUPPORT;
+        return SDR_ALGNOTSUPPORT;
     }
     
     /* Generate SM2 key pair */
@@ -469,9 +484,9 @@ static int handle_external_encrypt_ecc(daemon_context_t *ctx,
     
     /* Validate algorithm ID */
     ULONG alg_id = sdfx_ntohl(req->alg_id);
-    if (alg_id != SGD_SM2_1) {
+    if (alg_id != SGD_SM2_3) {
         LOG_ERROR("Unsupported algorithm ID: 0x%lx", alg_id);
-        return SDR_NOTSUPPORT;
+        return SDR_ALGNOTSUPPORT;
     }
     
     ULONG data_length = sdfx_ntohl(req->data_length);
@@ -510,9 +525,9 @@ static int handle_external_decrypt_ecc(daemon_context_t *ctx,
     
     /* Validate algorithm ID */
     ULONG alg_id = sdfx_ntohl(req->alg_id);
-    if (alg_id != SGD_SM2_1) {
+    if (alg_id != SGD_SM2_3) {
         LOG_ERROR("Unsupported algorithm ID: 0x%lx", alg_id);
-        return SDR_NOTSUPPORT;
+        return SDR_ALGNOTSUPPORT;
     }
     
     ULONG cipher_len = sdfx_ntohl(req->cipher.L);
@@ -557,14 +572,14 @@ static int handle_external_sign_ecc(daemon_context_t *ctx,
     
     /* Validate algorithm ID */
     ULONG alg_id = sdfx_ntohl(req->alg_id);
-    if (alg_id != SGD_SM2_3) {  /* SM2 signature algorithm */
+    if (alg_id != SGD_SM2_1) {  /* SM2 signature algorithm */
         LOG_ERROR("Unsupported algorithm ID: 0x%lx", alg_id);
-        return SDR_NOTSUPPORT;
+        return SDR_ALGNOTSUPPORT;
     }
     
     ULONG data_length = sdfx_ntohl(req->data_length);
-    if (data_length == 0) {
-        LOG_ERROR("Invalid data length: %lu", data_length);
+    if (data_length != 32) {
+        LOG_ERROR("SM2 signature input must be a 32-byte digest, got: %lu", data_length);
         return SDR_INARGERR;
     }
     
@@ -599,15 +614,15 @@ static int handle_external_verify_ecc(daemon_context_t *ctx,
     
     /* Validate algorithm ID */
     ULONG alg_id = sdfx_ntohl(req->alg_id);
-    if (alg_id != SGD_SM2_3) {  /* SM2 signature algorithm */
+    if (alg_id != SGD_SM2_1) {  /* SM2 signature algorithm */
         LOG_ERROR("Unsupported algorithm ID: 0x%lx", alg_id);
-        return SDR_NOTSUPPORT;
+        return SDR_ALGNOTSUPPORT;
     }
     
     ULONG data_length = sdfx_ntohl(req->data_length);
     ULONG signature_length = sdfx_ntohl(req->signature_length);
     
-    if (data_length == 0 || signature_length == 0) {
+    if (data_length != 32 || signature_length != 64) {
         LOG_ERROR("Invalid lengths - data: %lu, signature: %lu", data_length, signature_length);
         return SDR_INARGERR;
     }
@@ -853,6 +868,554 @@ static int handle_blob_command(daemon_context_t *ctx, ULONG cmd,
     return ret;
 }
 
+static int vpn_key_bits_valid(uint32_t bits)
+{
+    return bits >= 64 && bits <= 512 && (bits % 8) == 0;
+}
+
+static int vpn_create_key_handles(session_info_t *session,
+                                  const BYTE *material,
+                                  const uint32_t *bits, uint32_t count,
+                                  BYTE *output, uint32_t *output_len)
+{
+    uint64_t ids[4] = {0};
+    uint32_t offset = 0;
+    int ret = SDR_OK;
+    for (uint32_t i = 0; i < count; ++i) {
+        if (!vpn_key_bits_valid(bits[i])) {
+            ret = SDR_INARGERR;
+            break;
+        }
+        ret = session_key_create(session, material + offset, bits[i] / 8,
+                                 &ids[i]);
+        if (ret != SDR_OK) break;
+        sdfx_remote_handle_t wire = sdfx_htonll(ids[i]);
+        memcpy(output + i * sizeof(wire), &wire, sizeof(wire));
+        offset += bits[i] / 8;
+    }
+    if (ret != SDR_OK) {
+        for (uint32_t i = 0; i < count; ++i) {
+            if (ids[i] != 0) session_key_destroy(session, ids[i]);
+        }
+        return ret;
+    }
+    *output_len = count * sizeof(sdfx_remote_handle_t);
+    return SDR_OK;
+}
+
+static int vpn_wrap_keys(const ECCrefPublicKey *public_key,
+                         const BYTE *material, const uint32_t *bits,
+                         uint32_t count, BYTE *output,
+                         uint32_t *lengths, uint32_t *output_len)
+{
+    if (public_key == NULL || output == NULL || output_len == NULL)
+        return SDR_INARGERR;
+    BYTE temporary[sizeof(ECCCipher) + 63];
+    uint32_t material_offset = 0;
+    uint32_t output_offset = 0;
+    for (uint32_t i = 0; i < count; ++i) {
+        if (!vpn_key_bits_valid(bits[i])) return SDR_INARGERR;
+        memset(temporary, 0, sizeof(temporary));
+        ECCCipher *cipher = (ECCCipher *)temporary;
+        int ret = crypto_sm2_external_encrypt(public_key,
+            material + material_offset, bits[i] / 8, cipher, bits[i] / 8);
+        if (ret != SDR_OK) return ret;
+        uint32_t cipher_text_len = cipher->L;
+        uint32_t blob_len = sizeof(ECCCipher) + cipher_text_len - 1;
+        cipher->L = sdfx_htonl(cipher_text_len);
+        memcpy(output + output_offset, temporary, blob_len);
+        lengths[i] = blob_len;
+        output_offset += blob_len;
+        material_offset += bits[i] / 8;
+    }
+    memset(temporary, 0, sizeof(temporary));
+    *output_len = output_offset;
+    return SDR_OK;
+}
+
+static int handle_extended_operation(daemon_context_t *ctx,
+                                     const sdfx_extended_req_t *req,
+                                     size_t request_len,
+                                     sdfx_extended_resp_t *resp)
+{
+    if (ctx == NULL || req == NULL || resp == NULL ||
+        request_len < sizeof(*req)) {
+        return SDR_PROTOCOL_ERROR;
+    }
+
+    uint32_t data_len = sdfx_ntohl(req->data_length);
+    if (data_len > SDFX_MAX_BLOB_LENGTH ||
+        data_len != request_len - sizeof(*req)) {
+        return SDR_PROTOCOL_ERROR;
+    }
+
+    uint32_t session_id = (uint32_t)sdfx_ntohll(req->session_handle);
+    session_info_t *session = session_manager_get_session(ctx, session_id);
+    if (session == NULL) {
+        return SDR_INVALID_HANDLE;
+    }
+
+    uint32_t operation = sdfx_ntohl(req->operation);
+    ULONG alg_id = sdfx_ntohl(req->alg_id);
+    uint64_t object_id = sdfx_ntohll(req->object_handle);
+    uint32_t param[8];
+    for (size_t i = 0; i < 8; ++i) {
+        param[i] = sdfx_ntohl(req->param[i]);
+    }
+
+    BYTE key[64] = {0};
+    uint32_t key_len = sizeof(key);
+    uint32_t output_len = 0;
+    uint64_t output_object = 0;
+    uint32_t tag_len = 0;
+    int ret = SDR_NOTSUPPORT;
+
+    switch (operation) {
+        case SDFX_EXT_SYM_INIT:
+            if (param[1] != data_len) {
+                ret = SDR_PROTOCOL_ERROR;
+                break;
+            }
+            ret = session_key_get(session, object_id, key, &key_len);
+            if (ret == SDR_OK) {
+                ret = crypto_extended_cipher_init(session, key, key_len,
+                    alg_id, data_len == 0 ? NULL : req->data, data_len,
+                    param[0] != 0, NULL, 0, NULL, 0, 0);
+            }
+            break;
+
+        case SDFX_EXT_SYM_UPDATE:
+        case SDFX_EXT_AUTH_UPDATE:
+            output_len = SDFX_MAX_BLOB_LENGTH;
+            ret = crypto_extended_cipher_update(session, req->data, data_len,
+                                                  resp->data, &output_len);
+            break;
+
+        case SDFX_EXT_SYM_FINAL:
+            output_len = 32;
+            ret = crypto_extended_cipher_final(session, resp->data, &output_len,
+                                                NULL, NULL);
+            break;
+
+        case SDFX_EXT_MAC_INIT:
+            if (param[0] != data_len) {
+                ret = SDR_PROTOCOL_ERROR;
+                break;
+            }
+            ret = session_key_get(session, object_id, key, &key_len);
+            if (ret == SDR_OK) {
+                ret = crypto_extended_mac_init(session, key, key_len, alg_id,
+                    data_len == 0 ? NULL : req->data, data_len, 0);
+            }
+            break;
+
+        case SDFX_EXT_MAC_UPDATE:
+        case SDFX_EXT_HMAC_UPDATE:
+            ret = crypto_extended_mac_update(session, req->data, data_len);
+            break;
+
+        case SDFX_EXT_MAC_FINAL:
+        case SDFX_EXT_HMAC_FINAL:
+            output_len = 64;
+            ret = crypto_extended_mac_final(session, resp->data, &output_len);
+            break;
+
+        case SDFX_EXT_HMAC_INIT:
+            if (data_len != 0) {
+                ret = SDR_PROTOCOL_ERROR;
+                break;
+            }
+            ret = session_key_get(session, object_id, key, &key_len);
+            if (ret == SDR_OK) {
+                ret = crypto_extended_mac_init(session, key, key_len, alg_id,
+                                                NULL, 0, 1);
+            }
+            break;
+
+        case SDFX_EXT_AUTH_ONESHOT: {
+            uint32_t iv_len = param[1];
+            uint32_t aad_len = param[2];
+            tag_len = param[3];
+            uint32_t overhead = iv_len + aad_len +
+                                (param[0] != 0 ? tag_len : 0);
+            if ((alg_id != SGD_SM4_GCM && alg_id != SGD_SM4_CCM) ||
+                overhead > data_len ||
+                data_len - overhead > SDFX_MAX_BLOB_LENGTH - 16) {
+                ret = (alg_id == SGD_SM4_GCM || alg_id == SGD_SM4_CCM) ?
+                      SDR_PROTOCOL_ERROR : SDR_ALGNOTSUPPORT;
+                break;
+            }
+            const BYTE *iv = req->data;
+            const BYTE *aad = iv + iv_len;
+            const BYTE *input_tag = aad + aad_len;
+            const BYTE *input = input_tag + (param[0] != 0 ? tag_len : 0);
+            uint32_t input_len = data_len - overhead;
+            ret = session_key_get(session, object_id, key, &key_len);
+            if (ret == SDR_OK) {
+                ret = crypto_extended_cipher_init(session, key, key_len, alg_id,
+                    iv, iv_len, param[0] != 0, aad, aad_len,
+                    param[0] != 0 ? input_tag : NULL, tag_len, input_len);
+            }
+            if (ret == SDR_OK) {
+                output_len = SDFX_MAX_BLOB_LENGTH - tag_len;
+                ret = crypto_extended_cipher_update(session, input, input_len,
+                                                      resp->data, &output_len);
+            }
+            if (ret == SDR_OK) {
+                BYTE generated_tag[16] = {0};
+                uint32_t final_len = SDFX_MAX_BLOB_LENGTH - output_len - tag_len;
+                uint32_t produced_tag_len = tag_len;
+                ret = crypto_extended_cipher_final(session,
+                    resp->data + output_len, &final_len,
+                    param[0] != 0 ? NULL : generated_tag,
+                    param[0] != 0 ? NULL : &produced_tag_len);
+                if (ret == SDR_OK) {
+                    output_len += final_len;
+                    tag_len = param[0] != 0 ? 0 : produced_tag_len;
+                    if (tag_len > 0) {
+                        memcpy(resp->data + output_len, generated_tag, tag_len);
+                    }
+                    resp->param[0] = sdfx_htonl(output_len);
+                    resp->param[1] = sdfx_htonl(tag_len);
+                    output_len += tag_len;
+                }
+                memset(generated_tag, 0, sizeof(generated_tag));
+            } else {
+                crypto_extended_cleanup_session(session);
+            }
+            break;
+        }
+
+        case SDFX_EXT_AUTH_INIT: {
+            uint32_t iv_len = param[1];
+            uint32_t aad_len = param[2];
+            tag_len = param[3];
+            uint32_t overhead = iv_len + aad_len +
+                                (param[0] != 0 ? tag_len : 0);
+            if ((alg_id != SGD_SM4_GCM && alg_id != SGD_SM4_CCM) ||
+                overhead != data_len) {
+                ret = (alg_id == SGD_SM4_GCM || alg_id == SGD_SM4_CCM) ?
+                      SDR_PROTOCOL_ERROR : SDR_ALGNOTSUPPORT;
+                break;
+            }
+            const BYTE *iv = req->data;
+            const BYTE *aad = iv + iv_len;
+            const BYTE *input_tag = aad + aad_len;
+            ret = session_key_get(session, object_id, key, &key_len);
+            if (ret == SDR_OK) {
+                ret = crypto_extended_cipher_init(session, key, key_len, alg_id,
+                    iv, iv_len, param[0] != 0, aad, aad_len,
+                    param[0] != 0 ? input_tag : NULL, tag_len, param[4]);
+            }
+            break;
+        }
+
+        case SDFX_EXT_AUTH_FINAL:
+            output_len = 32;
+            tag_len = param[0];
+            {
+                BYTE generated_tag[16] = {0};
+                uint32_t produced_tag_len = tag_len;
+                ret = crypto_extended_cipher_final(session, resp->data,
+                    &output_len, tag_len == 0 ? NULL : generated_tag,
+                    tag_len == 0 ? NULL : &produced_tag_len);
+                if (ret == SDR_OK) {
+                    if (produced_tag_len > 0) {
+                        memcpy(resp->data + output_len, generated_tag,
+                               produced_tag_len);
+                    }
+                    resp->param[0] = sdfx_htonl(output_len);
+                    resp->param[1] = sdfx_htonl(produced_tag_len);
+                    output_len += produced_tag_len;
+                }
+                memset(generated_tag, 0, sizeof(generated_tag));
+            }
+            break;
+
+        case SDFX_EXT_EXTERNAL_CRYPT: {
+            uint32_t raw_key_len = param[1];
+            uint32_t iv_len = param[2];
+            if (raw_key_len > sizeof(key) || raw_key_len + iv_len >= data_len) {
+                ret = SDR_PROTOCOL_ERROR;
+                break;
+            }
+            const BYTE *raw_key = req->data;
+            const BYTE *iv = raw_key + raw_key_len;
+            const BYTE *input = iv + iv_len;
+            uint32_t input_len = data_len - raw_key_len - iv_len;
+            output_len = SDFX_MAX_BLOB_LENGTH;
+            if (param[0] != 0) {
+                ret = crypto_symmetric_decrypt(alg_id, raw_key, raw_key_len,
+                    iv_len == 0 ? NULL : iv, iv_len, input, input_len,
+                    resp->data, &output_len);
+            } else {
+                ret = crypto_symmetric_encrypt(alg_id, raw_key, raw_key_len,
+                    iv_len == 0 ? NULL : iv, iv_len, input, input_len,
+                    resp->data, &output_len);
+            }
+            break;
+        }
+
+        case SDFX_EXT_EXTERNAL_SYM_INIT: {
+            uint32_t raw_key_len = param[1];
+            uint32_t iv_len = param[2];
+            if (raw_key_len == 0 || raw_key_len > sizeof(key) ||
+                raw_key_len + iv_len != data_len) {
+                ret = SDR_PROTOCOL_ERROR;
+                break;
+            }
+            ret = crypto_extended_cipher_init(session, req->data, raw_key_len,
+                alg_id, iv_len == 0 ? NULL : req->data + raw_key_len, iv_len,
+                param[0] != 0, NULL, 0, NULL, 0, 0);
+            break;
+        }
+
+        case SDFX_EXT_EXTERNAL_HMAC_INIT:
+            if (param[0] == 0 || param[0] != data_len ||
+                param[0] > sizeof(key)) {
+                ret = SDR_PROTOCOL_ERROR;
+                break;
+            }
+            ret = crypto_extended_mac_init(session, req->data, data_len,
+                                            alg_id, NULL, 0, 1);
+            break;
+
+        case SDFX_EXT_AGREEMENT_SPONSOR:
+            if (param[2] != data_len) {
+                ret = SDR_PROTOCOL_ERROR;
+                break;
+            }
+            output_len = 2 * sizeof(ECCrefPublicKey);
+            ret = crypto_agreement_generate_sponsor(session, param[0],
+                param[1], req->data, data_len,
+                (ECCrefPublicKey *)resp->data,
+                (ECCrefPublicKey *)(resp->data + sizeof(ECCrefPublicKey)),
+                &output_object);
+            break;
+
+        case SDFX_EXT_AGREEMENT_KEY: {
+            uint32_t id_len = param[0];
+            uint32_t fixed_len = 2 * sizeof(ECCrefPublicKey);
+            if (id_len == 0 || id_len > data_len ||
+                data_len - id_len != fixed_len) {
+                ret = SDR_PROTOCOL_ERROR;
+                break;
+            }
+            ret = crypto_agreement_complete_sponsor(session, object_id,
+                req->data, id_len,
+                (const ECCrefPublicKey *)(req->data + id_len),
+                (const ECCrefPublicKey *)(req->data + id_len +
+                                          sizeof(ECCrefPublicKey)),
+                &output_object);
+            break;
+        }
+
+        case SDFX_EXT_AGREEMENT_RESPONSE: {
+            uint32_t response_id_len = param[2];
+            uint32_t sponsor_id_len = param[3];
+            uint32_t fixed_len = 2 * sizeof(ECCrefPublicKey);
+            if (response_id_len == 0 || sponsor_id_len == 0 ||
+                response_id_len + sponsor_id_len > data_len ||
+                data_len - response_id_len - sponsor_id_len != fixed_len) {
+                ret = SDR_PROTOCOL_ERROR;
+                break;
+            }
+            const BYTE *sponsor_id = req->data + response_id_len;
+            const ECCrefPublicKey *sponsor_public =
+                (const ECCrefPublicKey *)(sponsor_id + sponsor_id_len);
+            const ECCrefPublicKey *sponsor_temporary_public =
+                sponsor_public + 1;
+            output_len = 2 * sizeof(ECCrefPublicKey);
+            ret = crypto_agreement_generate_response(session, param[0],
+                param[1], req->data, response_id_len,
+                sponsor_id, sponsor_id_len, sponsor_public,
+                sponsor_temporary_public,
+                (ECCrefPublicKey *)resp->data,
+                (ECCrefPublicKey *)(resp->data + sizeof(ECCrefPublicKey)),
+                &output_object);
+            break;
+        }
+
+        case SDFX_EXT_VPN_IKE:
+        case SDFX_EXT_VPN_IKE_EPK: {
+            int wrapped = operation == SDFX_EXT_VPN_IKE_EPK;
+            uint32_t base = wrapped ? sizeof(ECCrefPublicKey) : 0;
+            uint64_t required = (uint64_t)base + param[0] + param[1] +
+                                param[2] + param[3];
+            uint32_t bits[3] = {param[4], param[5], param[6]};
+            if (required != data_len || !vpn_key_bits_valid(bits[0]) ||
+                !vpn_key_bits_valid(bits[1]) ||
+                !vpn_key_bits_valid(bits[2])) {
+                ret = SDR_PROTOCOL_ERROR;
+                break;
+            }
+            const ECCrefPublicKey *public_key = wrapped ?
+                (const ECCrefPublicKey *)req->data : NULL;
+            const BYTE *ni = req->data + base;
+            const BYTE *nr = ni + param[0];
+            const BYTE *cookie_i = nr + param[1];
+            const BYTE *cookie_r = cookie_i + param[2];
+            BYTE derived[192] = {0};
+            ret = crypto_vpn_derive_ike(alg_id, ni, param[0], nr, param[1],
+                cookie_i, param[2], cookie_r, param[3], bits, derived);
+            if (ret == SDR_OK && !wrapped) {
+                ret = vpn_create_key_handles(session, derived, bits, 3,
+                                              resp->data, &output_len);
+            } else if (ret == SDR_OK) {
+                uint32_t lengths[4] = {0};
+                ret = vpn_wrap_keys(public_key, derived, bits, 3,
+                                    resp->data, lengths, &output_len);
+                for (uint32_t i = 0; i < 3; ++i)
+                    resp->param[i] = sdfx_htonl(lengths[i]);
+            }
+            memset(derived, 0, sizeof(derived));
+            break;
+        }
+
+        case SDFX_EXT_VPN_IPSEC:
+        case SDFX_EXT_VPN_IPSEC_EPK: {
+            int wrapped = operation == SDFX_EXT_VPN_IPSEC_EPK;
+            uint32_t base = wrapped ? sizeof(ECCrefPublicKey) : 0;
+            uint64_t required = (uint64_t)base + param[0] + param[1] +
+                                param[2] + param[3];
+            uint32_t bits[2] = {param[4], param[5]};
+            uint32_t salt_len = param[6];
+            if (required != data_len || !vpn_key_bits_valid(bits[0]) ||
+                (bits[1] != 0 && !vpn_key_bits_valid(bits[1])) ||
+                salt_len > 32) {
+                ret = SDR_PROTOCOL_ERROR;
+                break;
+            }
+            const ECCrefPublicKey *public_key = wrapped ?
+                (const ECCrefPublicKey *)req->data : NULL;
+            const BYTE *protocol = req->data + base;
+            const BYTE *spi = protocol + param[0];
+            const BYTE *ni = spi + param[1];
+            const BYTE *nr = ni + param[2];
+            key_len = sizeof(key);
+            ret = session_key_get(session, object_id, key, &key_len);
+            BYTE derived[132] = {0};
+            if (ret == SDR_OK) {
+                ret = crypto_vpn_derive_ipsec(alg_id, key, key_len,
+                    protocol, param[0], spi, param[1], ni, param[2],
+                    nr, param[3], bits, salt_len, derived);
+            }
+            uint32_t key_bytes = bits[0] / 8 + bits[1] / 8;
+            if (ret == SDR_OK && !wrapped) {
+                uint64_t ids[2] = {0};
+                ret = session_key_create(session, derived, bits[0] / 8,
+                                         &ids[0]);
+                if (ret == SDR_OK && bits[1] != 0)
+                    ret = session_key_create(session,
+                        derived + bits[0] / 8, bits[1] / 8, &ids[1]);
+                if (ret != SDR_OK) {
+                    if (ids[0] != 0) session_key_destroy(session, ids[0]);
+                    if (ids[1] != 0) session_key_destroy(session, ids[1]);
+                } else {
+                    sdfx_remote_handle_t wire = sdfx_htonll(ids[0]);
+                    memcpy(resp->data, &wire, sizeof(wire));
+                    wire = sdfx_htonll(ids[1]);
+                    memcpy(resp->data + sizeof(wire), &wire, sizeof(wire));
+                    memcpy(resp->data + 2 * sizeof(wire),
+                           derived + key_bytes, salt_len);
+                    output_len = 2 * sizeof(wire) + salt_len;
+                    resp->param[0] = sdfx_htonl(bits[1] != 0);
+                    resp->param[2] = sdfx_htonl(salt_len);
+                }
+            } else if (ret == SDR_OK) {
+                uint32_t lengths[4] = {0};
+                uint32_t first_len = 0;
+                ret = vpn_wrap_keys(public_key, derived, bits, 1,
+                                    resp->data, lengths, &first_len);
+                uint32_t second_len = 0;
+                if (ret == SDR_OK && bits[1] != 0) {
+                    ret = vpn_wrap_keys(public_key, derived + bits[0] / 8,
+                        bits + 1, 1, resp->data + first_len,
+                        lengths + 1, &second_len);
+                }
+                if (ret == SDR_OK) {
+                    memcpy(resp->data + first_len + second_len,
+                           derived + key_bytes, salt_len);
+                    output_len = first_len + second_len + salt_len;
+                    resp->param[0] = sdfx_htonl(first_len);
+                    resp->param[1] = sdfx_htonl(second_len);
+                    resp->param[2] = sdfx_htonl(salt_len);
+                }
+            }
+            memset(derived, 0, sizeof(derived));
+            break;
+        }
+
+        case SDFX_EXT_VPN_SSL:
+        case SDFX_EXT_VPN_SSL_EPK: {
+            int wrapped = operation == SDFX_EXT_VPN_SSL_EPK;
+            uint32_t base = wrapped ? sizeof(ECCrefPublicKey) : 0;
+            uint64_t required = (uint64_t)base + param[0] + param[1];
+            uint32_t bits[4] = {param[2], param[3], param[4], param[5]};
+            if (required != data_len || !vpn_key_bits_valid(bits[0]) ||
+                !vpn_key_bits_valid(bits[1]) ||
+                !vpn_key_bits_valid(bits[2]) ||
+                !vpn_key_bits_valid(bits[3]) ||
+                param[6] > 64 || param[7] > 64) {
+                ret = SDR_PROTOCOL_ERROR;
+                break;
+            }
+            const ECCrefPublicKey *public_key = wrapped ?
+                (const ECCrefPublicKey *)req->data : NULL;
+            const BYTE *client_random = req->data + base;
+            const BYTE *server_random = client_random + param[0];
+            key_len = sizeof(key);
+            ret = session_key_get(session, object_id, key, &key_len);
+            BYTE derived[320] = {0};
+            if (ret == SDR_OK) {
+                ret = crypto_vpn_derive_ssl(alg_id, key, key_len,
+                    client_random, param[0], server_random, param[1],
+                    bits, param[6], param[7], derived);
+            }
+            uint32_t key_bytes = bits[0] / 8 + bits[1] / 8 +
+                                 bits[2] / 8 + bits[3] / 8;
+            if (ret == SDR_OK && !wrapped) {
+                ret = vpn_create_key_handles(session, derived, bits, 4,
+                                              resp->data, &output_len);
+                if (ret == SDR_OK) {
+                    memcpy(resp->data + output_len, derived + key_bytes,
+                           param[6] + param[7]);
+                    output_len += param[6] + param[7];
+                    resp->param[4] = sdfx_htonl(param[6]);
+                    resp->param[5] = sdfx_htonl(param[7]);
+                }
+            } else if (ret == SDR_OK) {
+                uint32_t lengths[4] = {0};
+                ret = vpn_wrap_keys(public_key, derived, bits, 4,
+                                    resp->data, lengths, &output_len);
+                if (ret == SDR_OK) {
+                    memcpy(resp->data + output_len, derived + key_bytes,
+                           param[6] + param[7]);
+                    output_len += param[6] + param[7];
+                    for (uint32_t i = 0; i < 4; ++i)
+                        resp->param[i] = sdfx_htonl(lengths[i]);
+                    resp->param[4] = sdfx_htonl(param[6]);
+                    resp->param[5] = sdfx_htonl(param[7]);
+                }
+            }
+            memset(derived, 0, sizeof(derived));
+            break;
+        }
+
+        default:
+            ret = SDR_NOTSUPPORT;
+            break;
+    }
+
+    memset(key, 0, sizeof(key));
+    if (ret == SDR_OK) {
+        resp->object_handle = sdfx_htonll(output_object);
+        resp->data_length = sdfx_htonl(output_len);
+    }
+    session_manager_put_session(session);
+    return ret;
+}
+
 int protocol_handler_init(daemon_context_t *ctx)
 {
     int device_ret = admin_device_info_load();
@@ -895,7 +1458,10 @@ static int validate_variable_request(ULONG cmd, const BYTE *data, size_t length)
             break;
         case SDFX_CMD_HASH_UPDATE:
             base = sizeof(sdfx_hash_update_req_t);
-            if (length >= base) first = sdfx_ntohl(((const sdfx_hash_update_req_t *)data)->data_length);
+            if (length >= base) {
+                first = sdfx_ntohl(((const sdfx_hash_update_req_t *)data)->data_length);
+                if (first == 0 || first > SDFX_MAX_BLOB_LENGTH) return SDR_INARGERR;
+            }
             break;
         case SDFX_CMD_HASH_FINAL: base = sizeof(sdfx_hash_final_req_t); break;
         case SDFX_CMD_ENCRYPT:
@@ -1019,6 +1585,13 @@ static int validate_variable_request(ULONG cmd, const BYTE *data, size_t length)
             base = sizeof(sdfx_blob_req_t);
             if (length >= base) {
                 first = sdfx_ntohl(((const sdfx_blob_req_t *)data)->data_length);
+                if (first > SDFX_MAX_BLOB_LENGTH) return SDR_INARGERR;
+            }
+            break;
+        case SDFX_CMD_EXTENDED_OPERATION:
+            base = sizeof(sdfx_extended_req_t);
+            if (length >= base) {
+                first = sdfx_ntohl(((const sdfx_extended_req_t *)data)->data_length);
                 if (first > SDFX_MAX_BLOB_LENGTH) return SDR_INARGERR;
             }
             break;
@@ -1204,6 +1777,9 @@ int protocol_handler_process_message(daemon_context_t *ctx,
             case SDFX_CMD_ADMIN_KEK_VERIFY:
             resp_data_size = sizeof(sdfx_blob_resp_t) + SDFX_MAX_BLOB_LENGTH;
             break;
+        case SDFX_CMD_EXTENDED_OPERATION:
+            resp_data_size = sizeof(sdfx_extended_resp_t) + SDFX_MAX_BLOB_LENGTH;
+            break;
         default:
             LOG_WARN("Unknown command %lu", (unsigned long)cmd);
             result = SDR_NOTSUPPORT;
@@ -1380,6 +1956,12 @@ int protocol_handler_process_message(daemon_context_t *ctx,
                     (sdfx_blob_resp_t *)(*response)->data);
                 break;
 
+            case SDFX_CMD_EXTENDED_OPERATION:
+                result = handle_extended_operation(ctx,
+                    (const sdfx_extended_req_t *)request->data,
+                    sdfx_ntohl(request->header.length),
+                    (sdfx_extended_resp_t *)(*response)->data);
+                break;
             case SDFX_CMD_ADMIN_STATUS:
             case SDFX_CMD_ADMIN_KEY_LIST:
             case SDFX_CMD_ADMIN_KEY_CREATE:
@@ -1426,9 +2008,17 @@ int protocol_handler_process_message(daemon_context_t *ctx,
     if ((cmd >= SDFX_CMD_GENERATE_KEY_KEK && cmd <= SDFX_CMD_IMPORT_KEY_ISK_ECC) ||
         (cmd >= SDFX_CMD_EXPORT_SIGN_PUB_RSA && cmd <= SDFX_CMD_EXTERNAL_PRIVATE_RSA) ||
         (cmd >= SDFX_CMD_ADMIN_STATUS && cmd <= SDFX_CMD_ADMIN_RSA_KEY_REINDEX) ||
-        cmd == SDFX_CMD_ADMIN_KEK_VERIFY) {
-        sdfx_blob_resp_t *blob = (sdfx_blob_resp_t *)(*response)->data;
-        size_t actual = sizeof(*blob) + sdfx_ntohl(blob->data_length);
+        (cmd == SDFX_CMD_ADMIN_KEK_VERIFY ||
+         cmd == SDFX_CMD_EXTENDED_OPERATION)) {
+        size_t actual;
+        if (cmd == SDFX_CMD_EXTENDED_OPERATION) {
+            sdfx_extended_resp_t *extended =
+                (sdfx_extended_resp_t *)(*response)->data;
+            actual = sizeof(*extended) + sdfx_ntohl(extended->data_length);
+        } else {
+            sdfx_blob_resp_t *blob = (sdfx_blob_resp_t *)(*response)->data;
+            actual = sizeof(*blob) + sdfx_ntohl(blob->data_length);
+        }
         if (actual <= resp_data_size) {
             *response_size = sizeof(sdfx_message_header_t) + actual;
             (*response)->header.length = sdfx_htonl((ULONG)actual);

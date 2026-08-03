@@ -32,6 +32,12 @@
  */
 LONG sdf_send_request(ULONG cmd, const void *req_data, size_t req_size, 
                       void *resp_buffer, size_t resp_buffer_size, size_t *resp_len);
+LONG sdf_extended_call_id(HANDLE session_handle,
+                          sdfx_remote_handle_t object_id,
+                          uint32_t operation, ULONG alg_id,
+                          const uint32_t param[8],
+                          const BYTE *data, uint32_t data_len,
+                          BYTE **response_message);
 
 /**
  * @brief Get the server-side session ID
@@ -42,6 +48,8 @@ LONG sdf_send_request(ULONG cmd, const void *req_data, size_t req_size,
 LONG sdf_get_server_session_id(HANDLE hSessionHandle, sdfx_remote_handle_t *server_session_id);
 LONG sdf_get_server_device_id(HANDLE hDeviceHandle, sdfx_remote_handle_t *server_device_id);
 LONG sdf_get_server_key_id(HANDLE hKeyHandle, sdfx_remote_handle_t *server_key_id);
+LONG sdf_get_server_agreement_id(HANDLE hAgreementHandle,
+                                 sdfx_remote_handle_t *server_agreement_id);
 
 /**
  * @brief Validate session handle and get server session ID

@@ -614,6 +614,14 @@ static int load_private_key(session_info_t *session, uint32_t type,
     }
     return ret;
 }
+
+int internal_key_load_private_for_agreement(session_info_t *session,
+                                            uint32_t index,
+                                            ECCrefPrivateKey *private_key)
+{
+    return load_private_key(session, SDFX_INTERNAL_KEY_ENC, index, private_key);
+}
+
 int internal_key_export_public(uint32_t type, uint32_t index,
                                ECCrefPublicKey *public_key)
 {
@@ -633,7 +641,7 @@ int internal_key_sign(session_info_t *session, uint32_t index,
                       const BYTE *data, uint32_t data_len,
                       BYTE signature[64])
 {
-    if (session == NULL || data == NULL || data_len == 0 || signature == NULL) {
+    if (session == NULL || data == NULL || data_len != 32 || signature == NULL) {
         return SDR_INARGERR;
     }
     ECCrefPrivateKey private_key;
@@ -653,6 +661,9 @@ int internal_key_sign(session_info_t *session, uint32_t index,
 int internal_key_verify(uint32_t index, const BYTE *data, uint32_t data_len,
                         const BYTE signature[64])
 {
+    if (data == NULL || data_len != 32 || signature == NULL) {
+        return SDR_INARGERR;
+    }
     ECCrefPublicKey public_key;
     int ret = internal_key_export_public(SDFX_INTERNAL_KEY_SIGN, index, &public_key);
     if (ret == SDR_OK) {

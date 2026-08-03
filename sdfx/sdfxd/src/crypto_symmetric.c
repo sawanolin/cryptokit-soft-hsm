@@ -86,8 +86,8 @@ static CRYPT_CIPHER_AlgId sdf_to_hitls_cipher_alg(ULONG sdf_alg_id)
             return CRYPT_CIPHER_SM4_OFB;
         case SGD_SM4_CTR:
             return CRYPT_CIPHER_SM4_CTR;
-        case SGD_SM4_GCM:
-            return CRYPT_CIPHER_SM4_GCM;
+        case SGD_SM4_XTS:
+            return CRYPT_CIPHER_SM4_XTS;
         default:
             return CRYPT_CIPHER_MAX;
     }
@@ -105,8 +105,10 @@ int crypto_symmetric_encrypt(ULONG alg_id, const BYTE *key, ULONG key_len,
         return SDR_INARGERR;
     }
     
-    if (key_len != 16 ||
-        ((alg_id == SGD_SM4_ECB || alg_id == SGD_SM4_CBC) && (plaintext_len % 16) != 0)) {
+    if (((alg_id == SGD_SM4_XTS) ? key_len != 32 : key_len != 16) ||
+        ((alg_id == SGD_SM4_ECB || alg_id == SGD_SM4_CBC) &&
+         (plaintext_len % 16) != 0) ||
+        (alg_id == SGD_SM4_XTS && plaintext_len < 16)) {
         return SDR_INARGERR;
     }
     /* Ensure crypto engine is initialized */
@@ -188,8 +190,10 @@ int crypto_symmetric_decrypt(ULONG alg_id, const BYTE *key, ULONG key_len,
     if (key == NULL || ciphertext == NULL || plaintext == NULL || plaintext_len == NULL) {
         return SDR_INARGERR;
     }
-    if (key_len != 16 ||
-        ((alg_id == SGD_SM4_ECB || alg_id == SGD_SM4_CBC) && (ciphertext_len % 16) != 0)) {
+    if (((alg_id == SGD_SM4_XTS) ? key_len != 32 : key_len != 16) ||
+        ((alg_id == SGD_SM4_ECB || alg_id == SGD_SM4_CBC) &&
+         (ciphertext_len % 16) != 0) ||
+        (alg_id == SGD_SM4_XTS && ciphertext_len < 16)) {
         return SDR_INARGERR;
     }
     

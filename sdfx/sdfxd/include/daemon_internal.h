@@ -67,6 +67,9 @@ typedef struct session_info {
     /* Crypto contexts */
     void *hash_ctx;
     void *cipher_ctx;
+    void *mac_ctx;
+    void *agreements;
+    uint64_t next_agreement_id;
 
     /* Session-scoped objects; key bytes never leave the server. */
     pthread_mutex_t object_mutex;
@@ -143,14 +146,81 @@ void crypto_engine_cleanup(void);
 
 /* Hash Algorithm */
 int crypto_hash_init(daemon_context_t *ctx, session_info_t *session, ULONG alg_id);
+int crypto_hash_init_sm2_preprocess(daemon_context_t *ctx, session_info_t *session,
+                                    const ECCrefPublicKey *public_key,
+                                    const BYTE *id, ULONG id_len);
 int crypto_hash_update(daemon_context_t *ctx, session_info_t *session, 
                       const BYTE *data, ULONG data_len);
 int crypto_hash_final(daemon_context_t *ctx, session_info_t *session,
                      BYTE *hash, ULONG *hash_len);
 int crypto_hash_digest(ULONG alg_id, const BYTE *data, ULONG data_len,
                       BYTE *hash, ULONG *hash_len);
+int crypto_sm2_validate_public_key(const ECCrefPublicKey *public_key);
 
 /* Symmetric Cryptography */
+void crypto_extended_cleanup_session(session_info_t *session);
+void crypto_agreement_cleanup_session(session_info_t *session);
+int crypto_vpn_derive_ike(ULONG prf_alg,
+                          const BYTE *ni, uint32_t ni_len,
+                          const BYTE *nr, uint32_t nr_len,
+                          const BYTE *cookie_i, uint32_t cookie_i_len,
+                          const BYTE *cookie_r, uint32_t cookie_r_len,
+                          const uint32_t bits[3], BYTE output[192]);
+int crypto_vpn_derive_ipsec(ULONG prf_alg, const BYTE *base_key,
+                            uint32_t base_key_len,
+                            const BYTE *protocol, uint32_t protocol_len,
+                            const BYTE *spi, uint32_t spi_len,
+                            const BYTE *ni, uint32_t ni_len,
+                            const BYTE *nr, uint32_t nr_len,
+                            const uint32_t bits[2], uint32_t salt_len,
+                            BYTE output[132]);
+int crypto_vpn_derive_ssl(ULONG prf_alg, const BYTE *pre_master,
+                          uint32_t pre_master_len,
+                          const BYTE *client_random, uint32_t client_len,
+                          const BYTE *server_random, uint32_t server_len,
+                          const uint32_t bits[4], uint32_t client_iv_len,
+                          uint32_t server_iv_len, BYTE output[320]);
+int crypto_agreement_generate_sponsor(
+    session_info_t *session, uint32_t key_index, uint32_t key_bits,
+    const BYTE *sponsor_id, uint32_t sponsor_id_len,
+    ECCrefPublicKey *sponsor_public,
+    ECCrefPublicKey *sponsor_temporary_public,
+    uint64_t *agreement_id);
+int crypto_agreement_complete_sponsor(
+    session_info_t *session, uint64_t agreement_id,
+    const BYTE *response_id, uint32_t response_id_len,
+    const ECCrefPublicKey *response_public,
+    const ECCrefPublicKey *response_temporary_public,
+    uint64_t *key_id);
+int crypto_agreement_generate_response(
+    session_info_t *session, uint32_t key_index, uint32_t key_bits,
+    const BYTE *response_id, uint32_t response_id_len,
+    const BYTE *sponsor_id, uint32_t sponsor_id_len,
+    const ECCrefPublicKey *sponsor_public,
+    const ECCrefPublicKey *sponsor_temporary_public,
+    ECCrefPublicKey *response_public,
+    ECCrefPublicKey *response_temporary_public,
+    uint64_t *key_id);
+int crypto_extended_cipher_init(session_info_t *session, const BYTE *key,
+                                uint32_t key_len, ULONG alg_id,
+                                const BYTE *iv, uint32_t iv_len, int decrypt,
+                                const BYTE *aad, uint32_t aad_len,
+                                const BYTE *tag, uint32_t tag_len,
+                                uint32_t total_data_len);
+int crypto_extended_cipher_update(session_info_t *session,
+                                  const BYTE *input, uint32_t input_len,
+                                  BYTE *output, uint32_t *output_len);
+int crypto_extended_cipher_final(session_info_t *session,
+                                 BYTE *output, uint32_t *output_len,
+                                 BYTE *tag, uint32_t *tag_len);
+int crypto_extended_mac_init(session_info_t *session, const BYTE *key,
+                             uint32_t key_len, ULONG alg_id,
+                             const BYTE *iv, uint32_t iv_len, int hmac);
+int crypto_extended_mac_update(session_info_t *session,
+                               const BYTE *input, uint32_t input_len);
+int crypto_extended_mac_final(session_info_t *session,
+                              BYTE *output, uint32_t *output_len);
+
 int crypto_symmetric_encrypt(ULONG alg_id, const BYTE *key, ULONG key_len,
                             const BYTE *iv, ULONG iv_len,
                             const BYTE *plaintext, ULONG plaintext_len,
@@ -198,6 +268,9 @@ int user_file_delete(const BYTE *name, uint32_t name_len);
 int internal_key_get_access(session_info_t *session, uint32_t index,
                             const BYTE *password, uint32_t password_len);
 int internal_key_release_access(session_info_t *session, uint32_t index);
+int internal_key_load_private_for_agreement(session_info_t *session,
+                                            uint32_t index,
+                                            ECCrefPrivateKey *private_key);
 int internal_key_export_public(uint32_t type, uint32_t index,
                                ECCrefPublicKey *public_key);
 int internal_key_sign(session_info_t *session, uint32_t index,
@@ -239,10 +312,6 @@ int crypto_symmetric_decrypt(ULONG alg_id, const BYTE *key, ULONG key_len,
                             BYTE *plaintext, ULONG *plaintext_len);
 
 /* SM2 Asymmetric Cryptography */
-int crypto_sm2_internal_sign(ULONG key_index, const BYTE *data, ULONG data_len,
-                            BYTE *signature, ULONG *signature_len);
-int crypto_sm2_internal_verify(ULONG key_index, const BYTE *data, ULONG data_len,
-                              const BYTE *signature, ULONG signature_len);
 int crypto_sm2_external_encrypt(const ECCrefPublicKey *public_key,
                                const BYTE *plaintext, ULONG plaintext_len,
                                ECCCipher *ciphertext, ULONG ciphertext_capacity);

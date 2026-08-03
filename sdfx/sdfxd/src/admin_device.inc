@@ -120,9 +120,10 @@ static void admin_device_info_reset_runtime(void)
         .DeviceSerial = "SW000001",
         .DeviceVersion = 0x00010000,
         .StandardVersion = 0x00020023,
-        .AsymAlgAbility = {SGD_SM2_1 | SGD_SM2_3, 256},
+        .AsymAlgAbility = {SGD_SM2_1 | SGD_SM2_2 | SGD_SM2_3, 256},
         .SymAlgAbility = SGD_SM4_ECB | SGD_SM4_CBC | SGD_SM4_CFB |
-                         SGD_SM4_OFB | SGD_SM4_CTR | SGD_SM4_MAC,
+                         SGD_SM4_OFB | SGD_SM4_CTR | SGD_SM4_MAC |
+                         SGD_SM4_GCM | SGD_SM4_CCM | SGD_SM4_XTS,
         .HashAlgAbility = SGD_SM3,
         .BufferSize = 4096
     };

@@ -154,6 +154,22 @@ LONG sdf_get_server_device_id(HANDLE hDeviceHandle, sdfx_remote_handle_t *server
     return SDR_OK;
 }
 
+LONG sdf_get_server_agreement_id(HANDLE hAgreementHandle,
+                                 sdfx_remote_handle_t *server_agreement_id)
+{
+    if (server_agreement_id == NULL ||
+        handle_manager_validate_agreement(hAgreementHandle) != SDR_OK) {
+        return SDR_INVALID_HANDLE;
+    }
+    sdfx_remote_handle_t *data =
+        (sdfx_remote_handle_t *)handle_manager_get_private_data(hAgreementHandle);
+    if (data == NULL) {
+        return SDR_INVALID_HANDLE;
+    }
+    *server_agreement_id = *data;
+    return SDR_OK;
+}
+
 LONG sdf_get_server_key_id(HANDLE hKeyHandle, sdfx_remote_handle_t *server_key_id)
 {
     if (server_key_id == NULL || handle_manager_validate_key(hKeyHandle) != SDR_OK) {

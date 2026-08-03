@@ -48,8 +48,7 @@ coverage/
 
 # Standards material excluded until redistribution rights are confirmed
 /GMT 0018-2023 密码设备应用接口规范.json
+/PUBLISHING.md
 
 # Release staging; checked-in dist/ SDK remains tracked
 /release/
-
-PUBLISHING.md

@@ -103,6 +103,88 @@ int crypto_hash_init(daemon_context_t *ctx, session_info_t *session, ULONG alg_i
     return SDR_OK;
 }
 
+int crypto_hash_init_sm2_preprocess(daemon_context_t *ctx, session_info_t *session,
+                                    const ECCrefPublicKey *public_key,
+                                    const BYTE *id, ULONG id_len)
+{
+    static const BYTE sm2_curve_parameters[] = {
+        /* a */
+        0xff,0xff,0xff,0xfe,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+        0xff,0xff,0xff,0xff,0x00,0x00,0x00,0x00,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xfc,
+        /* b */
+        0x28,0xe9,0xfa,0x9e,0x9d,0x9f,0x5e,0x34,0x4d,0x5a,0x9e,0x4b,0xcf,0x65,0x09,0xa7,
+        0xf3,0x97,0x89,0xf5,0x15,0xab,0x8f,0x92,0xdd,0xbc,0xbd,0x41,0x4d,0x94,0x0e,0x93,
+        /* xG */
+        0x32,0xc4,0xae,0x2c,0x1f,0x19,0x81,0x19,0x5f,0x99,0x04,0x46,0x6a,0x39,0xc9,0x94,
+        0x8f,0xe3,0x0b,0xbf,0xf2,0x66,0x0b,0xe1,0x71,0x5a,0x45,0x89,0x33,0x4c,0x74,0xc7,
+        /* yG */
+        0xbc,0x37,0x36,0xa2,0xf4,0xf6,0x77,0x9c,0x59,0xbd,0xce,0xe3,0x6b,0x69,0x21,0x53,
+        0xd0,0xa9,0x87,0x7c,0xc6,0x2a,0x47,0x40,0x02,0xdf,0x32,0xe5,0x21,0x39,0xf0,0xa0
+    };
+    BYTE entl[2];
+    BYTE z_digest[32] = {0};
+    uint32_t z_length = sizeof(z_digest);
+    CRYPT_EAL_MdCTX *z_ctx = NULL;
+    CRYPT_EAL_MdCTX *message_ctx;
+    int32_t hitls_ret;
+    int ret;
+
+    if (ctx == NULL || session == NULL || public_key == NULL || id == NULL ||
+        id_len == 0 || id_len > SDFX_MAX_SM2_ID_LENGTH) {
+        return SDR_INARGERR;
+    }
+    ret = crypto_sm2_validate_public_key(public_key);
+    if (ret != SDR_OK) {
+        return ret;
+    }
+    if (hash_crypto_engine_check() != 0) {
+        return SDR_SYMOPERR;
+    }
+
+    entl[0] = (BYTE)((id_len * 8U) >> 8);
+    entl[1] = (BYTE)(id_len * 8U);
+    z_ctx = CRYPT_EAL_MdNewCtx(CRYPT_MD_SM3);
+    if (z_ctx == NULL) {
+        return SDR_NOBUFFER;
+    }
+    hitls_ret = CRYPT_EAL_MdInit(z_ctx);
+    if (hitls_ret == CRYPT_SUCCESS) hitls_ret = CRYPT_EAL_MdUpdate(z_ctx, entl, sizeof(entl));
+    if (hitls_ret == CRYPT_SUCCESS) hitls_ret = CRYPT_EAL_MdUpdate(z_ctx, id, id_len);
+    if (hitls_ret == CRYPT_SUCCESS) hitls_ret = CRYPT_EAL_MdUpdate(z_ctx,
+        sm2_curve_parameters, sizeof(sm2_curve_parameters));
+    if (hitls_ret == CRYPT_SUCCESS) hitls_ret = CRYPT_EAL_MdUpdate(z_ctx,
+        public_key->x + ECCref_MAX_LEN - 32, 32);
+    if (hitls_ret == CRYPT_SUCCESS) hitls_ret = CRYPT_EAL_MdUpdate(z_ctx,
+        public_key->y + ECCref_MAX_LEN - 32, 32);
+    if (hitls_ret == CRYPT_SUCCESS) hitls_ret = CRYPT_EAL_MdFinal(z_ctx,
+        z_digest, &z_length);
+    CRYPT_EAL_MdFreeCtx(z_ctx);
+    if (hitls_ret != CRYPT_SUCCESS || z_length != sizeof(z_digest)) {
+        memset(z_digest, 0, sizeof(z_digest));
+        LOG_ERROR("Failed to compute SM2 Z digest: 0x%x", hitls_ret);
+        return SDR_SYMOPERR;
+    }
+
+    /* GM/T 0018 initializes the message digest as H(Z || M), not H(Z-input || M). */
+    ret = crypto_hash_init(ctx, session, SGD_SM3);
+    if (ret != SDR_OK) {
+        memset(z_digest, 0, sizeof(z_digest));
+        return ret;
+    }
+    message_ctx = (CRYPT_EAL_MdCTX *)session->hash_ctx;
+    hitls_ret = CRYPT_EAL_MdUpdate(message_ctx, z_digest, z_length);
+    memset(z_digest, 0, sizeof(z_digest));
+    if (hitls_ret != CRYPT_SUCCESS) {
+        CRYPT_EAL_MdFreeCtx(message_ctx);
+        session->hash_ctx = NULL;
+        LOG_ERROR("Failed to initialize SM2 message digest with Z: 0x%x", hitls_ret);
+        return SDR_SYMOPERR;
+    }
+
+    LOG_DEBUG("SM2 Z preprocessing initialized, identity length: %lu",
+              (unsigned long)id_len);
+    return SDR_OK;
+}
 /**
  * @brief Hash update
  */

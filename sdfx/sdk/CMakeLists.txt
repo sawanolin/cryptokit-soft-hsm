@@ -13,7 +13,9 @@ add_library(sdfx_sdk SHARED
     src/sdf_rsa.c
     src/handle_manager.c
     src/error_handler.c
-    src/sdf_stubs.c
+    src/sdf_extended.c
+    src/sdf_agreement.c
+    src/sdf_vpn.c
     src/sdf_stubs_sm9_vpn.c
     ../common/src/config.c
 )

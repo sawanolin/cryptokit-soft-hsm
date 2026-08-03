@@ -65,6 +65,8 @@ int main(void)
     BYTE plaintext[1024];
     ULONG plaintext_len = sizeof(plaintext);
     ECCSignature eccSig;
+    BYTE digest[32];
+    ULONG digest_len = sizeof(digest);
     
     /* Open device */
     ret = SDF_OpenDevice(&hDevice);
@@ -103,7 +105,7 @@ int main(void)
     /* SM2 public key encryption */
     BYTE eccCipherBuffer[sizeof(ECCCipher) + 255];
     ECCCipher *eccCipher = (ECCCipher *)eccCipherBuffer;
-    ret = SDF_ExternalEncrypt_ECC(hSession, SGD_SM2_1, &publicKey, 
+    ret = SDF_ExternalEncrypt_ECC(hSession, SGD_SM2_3, &publicKey,
                                  (BYTE*)test_data, test_data_len, eccCipher);
     if (ret != SDR_OK) {
         printf("❌ SM2 encryption failed: 0x%lx\n", ret);
@@ -114,7 +116,7 @@ int main(void)
     print_hex("Ciphertext", eccCipher->C, eccCipher->L);
     
     /* SM2 private key decryption */
-    ret = SDF_ExternalDecrypt_ECC(hSession, SGD_SM2_1, &privateKey, 
+    ret = SDF_ExternalDecrypt_ECC(hSession, SGD_SM2_3, &privateKey,
                                  eccCipher, plaintext, &plaintext_len);
     if (ret != SDR_OK) {
         printf("❌ SM2 decryption failed: 0x%lx\n", ret);
@@ -133,22 +135,30 @@ int main(void)
         goto cleanup;
     }
     
+    ret = SDF_HashInit(hSession, SGD_SM3, NULL, NULL, 0);
+    if (ret == SDR_OK) ret = SDF_HashUpdate(hSession, (BYTE *)test_data, test_data_len);
+    if (ret == SDR_OK) ret = SDF_HashFinal(hSession, digest, &digest_len);
+    if (ret != SDR_OK || digest_len != sizeof(digest)) {
+        printf("SM3 digest preparation failed: 0x%x\n", (unsigned int)ret);
+        goto cleanup;
+    }
+
     printf("\n=== SM2 signature verification test ===\n");
     
     /* SM2 signature */
-    ret = SDF_ExternalSign_ECC(hSession, SGD_SM2_3, &privateKey,
-                              (BYTE*)test_data, test_data_len, &eccSig);
+    ret = SDF_ExternalSign_ECC(hSession, SGD_SM2_1, &privateKey,
+                              digest, digest_len, &eccSig);
     if (ret != SDR_OK) {
         printf("❌ SM2 signature failed: 0x%lx\n", ret);
         goto cleanup;
     }
     printf("✅ SM2 signature successful\n");
-    print_hex("Signature r", eccSig.r, 32);
-    print_hex("Signature s", eccSig.s, 32);
+    print_hex("Signature r", eccSig.r + ECCref_MAX_LEN - 32, 32);
+    print_hex("Signature s", eccSig.s + ECCref_MAX_LEN - 32, 32);
     
     /* SM2 verification */
-    ret = SDF_ExternalVerify_ECC(hSession, SGD_SM2_3, &publicKey,
-                                (BYTE*)test_data, test_data_len, &eccSig);
+    ret = SDF_ExternalVerify_ECC(hSession, SGD_SM2_1, &publicKey,
+                                digest, digest_len, &eccSig);
     if (ret != SDR_OK) {
         printf("❌ SM2 verification failed: 0x%lx\n", ret);
         goto cleanup;
@@ -159,7 +169,7 @@ int main(void)
     
     /* Test empty data encryption */
     printf("Testing empty data encryption...\n");
-    ret = SDF_ExternalEncrypt_ECC(hSession, SGD_SM2_1, &publicKey, NULL, 0, eccCipher);
+    ret = SDF_ExternalEncrypt_ECC(hSession, SGD_SM2_3, &publicKey, NULL, 0, eccCipher);
     if (ret != SDR_OK) {
         printf("✅ Empty data encryption correctly returned error: 0x%lx\n", ret);
     } else {
@@ -170,7 +180,7 @@ int main(void)
     printf("Testing large data encryption (300 bytes)...");
     BYTE large_data[300];
     memset(large_data, 0xAA, sizeof(large_data));
-    ret = SDF_ExternalEncrypt_ECC(hSession, SGD_SM2_1, &publicKey, 
+    ret = SDF_ExternalEncrypt_ECC(hSession, SGD_SM2_3, &publicKey,
                                  large_data, sizeof(large_data), eccCipher);
     if (ret != SDR_OK) {
         printf("✅ Large data encryption correctly returned error: 0x%lx\n", ret);
@@ -210,7 +220,7 @@ int main(void)
     printf("Encryption performance test (50 iterations)...");
     start = clock();
     for (int i = 0; i < 50; i++) {
-        ret = SDF_ExternalEncrypt_ECC(hSession, SGD_SM2_1, &publicKey,
+        ret = SDF_ExternalEncrypt_ECC(hSession, SGD_SM2_3, &publicKey,
                                      (BYTE*)test_data, test_data_len, eccCipher);
         if (ret != SDR_OK) {
             printf("❌ Encryption failed #%d: 0x%lx\n", i+1, ret);

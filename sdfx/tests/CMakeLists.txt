@@ -50,6 +50,22 @@ target_link_libraries(test_hash
 
 add_test(NAME test_hash COMMAND test_hash)
 
+# GM/T 0018-2023 streaming, HMAC, AEAD and Appendix C integration tests
+add_executable(test_0018_extended
+    test_0018_extended.c
+)
+
+target_include_directories(test_0018_extended PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+target_link_libraries(test_0018_extended
+    sdfx_sdk
+    ${COMMON_LIBS}
+)
+
+add_test(NAME test_0018_extended COMMAND test_0018_extended)
+
 # Symmetric encryption tests
 add_executable(test_symmetric
     test_symmetric.c

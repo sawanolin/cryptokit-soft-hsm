@@ -151,6 +151,8 @@ void session_objects_cleanup(session_info_t *session)
     if (session == NULL) {
         return;
     }
+    crypto_extended_cleanup_session(session);
+    crypto_agreement_cleanup_session(session);
     pthread_mutex_lock(&session->object_mutex);
     session_key_t *entry = session->keys;
     session->keys = NULL;

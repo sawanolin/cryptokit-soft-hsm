@@ -94,6 +94,9 @@ LONG SDF_ExternalEncrypt_ECC(HANDLE hSessionHandle, ULONG uiAlgID,
     SDF_CHECK_PARAM(hSessionHandle != NULL && pucPublicKey != NULL &&
                     pucData != NULL && uiDataLength > 0 && uiDataLength <= 256 &&
                     pucEncData != NULL, SDR_INARGERR);
+    if (uiAlgID != SGD_SM2_3) {
+        return SDR_ALGNOTSUPPORT;
+    }
 
     sdfx_remote_handle_t server_session_id;
     SDF_CHECK_SESSION(hSessionHandle, server_session_id);
@@ -142,6 +145,9 @@ LONG SDF_ExternalDecrypt_ECC(HANDLE hSessionHandle, ULONG uiAlgID,
                     pucEncData != NULL && pucData != NULL &&
                     puiDataLength != NULL && pucEncData->L > 0 && pucEncData->L <= 256,
                     SDR_INARGERR);
+    if (uiAlgID != SGD_SM2_3) {
+        return SDR_ALGNOTSUPPORT;
+    }
 
     sdfx_remote_handle_t server_session_id;
     SDF_CHECK_SESSION(hSessionHandle, server_session_id);
@@ -189,7 +195,9 @@ LONG SDF_GenerateKeyPair_ECC(HANDLE hSessionHandle, ULONG uiAlgID, ULONG uiKeyBi
     ECCrefPublicKey *pucPublicKey, ECCrefPrivateKey *pucPrivateKey)
 {
     SDF_CHECK_PARAM(hSessionHandle != NULL && pucPublicKey != NULL && 
-                    pucPrivateKey != NULL && uiKeyBits == 256, SDR_INARGERR);
+                    pucPrivateKey != NULL && uiKeyBits == 256 &&
+                    (uiAlgID == SGD_SM2_1 || uiAlgID == SGD_SM2_2 ||
+                     uiAlgID == SGD_SM2_3), SDR_INARGERR);
     
     sdfx_remote_handle_t server_session_id;
     SDF_CHECK_SESSION(hSessionHandle, server_session_id);
@@ -228,8 +236,11 @@ LONG SDF_ExternalSign_ECC(HANDLE hSessionHandle, ULONG uiAlgID,
     ECCSignature *pucSignature)
 {
     SDF_CHECK_PARAM(hSessionHandle != NULL && pucPrivateKey != NULL && 
-                    pucData != NULL && uiDataLength > 0 && 
+                    pucData != NULL && uiDataLength == 32 &&
                     pucSignature != NULL, SDR_INARGERR);
+    if (uiAlgID != SGD_SM2_1) {
+        return SDR_ALGNOTSUPPORT;
+    }
     
     sdfx_remote_handle_t server_session_id;
     SDF_CHECK_SESSION(hSessionHandle, server_session_id);
@@ -282,8 +293,11 @@ LONG SDF_ExternalVerify_ECC(HANDLE hSessionHandle, ULONG uiAlgID,
     ECCSignature *pucSignature)
 {
     SDF_CHECK_PARAM(hSessionHandle != NULL && pucPublicKey != NULL && 
-                    pucData != NULL && uiDataLength > 0 && 
+                    pucData != NULL && uiDataLength == 32 &&
                     pucSignature != NULL, SDR_INARGERR);
+    if (uiAlgID != SGD_SM2_1) {
+        return SDR_ALGNOTSUPPORT;
+    }
     
     sdfx_remote_handle_t server_session_id;
     SDF_CHECK_SESSION(hSessionHandle, server_session_id);

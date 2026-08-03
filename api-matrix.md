@@ -1,89 +1,54 @@
 # GM/T 0018-2023 API 实现矩阵
 
-更新时间：2026-07-31
+更新时间：2026-08-03
 
-本矩阵对应当前源码和 Docker 端到端测试结果。项目定位是学习、开发和接口联调用的软件密码设备模拟器，不代表经过商用密码检测认证的硬件服务器密码机。未实现接口明确返回 `SDR_NOTSUPPORT`，不会伪造成功。
+本矩阵以当前源码、动态库导出和 Docker 客户端—服务端回归为准。项目用于学习、开发和接口联调，不代表通过商用密码产品检测、GM/T 0018 一致性检测或硬件安全认证。
 
-## 已实现并通过端到端测试
+## 实现范围
 
+除附录 B 的 SM9 接口外，当前 `sdf.h` 中的基础接口、扩展接口和附录 C VPN 接口均已有客户端、TCP 协议和服务端实现。SM9 符号保留导出，但明确返回 `SDR_NOTSUPPORT`。
 
-| 分类         | 接口                                                                                                                              | 当前能力                                                                          |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| 设备/会话    | `SDF_OpenDevice`、`SDF_CloseDevice`、`SDF_OpenSession`、`SDF_CloseSession`                                                        | 远程 ID、本地不透明句柄、服务端引用计数和并发保护                                 |
-| 设备信息     | `SDF_GetDeviceInfo`                                                                                                               | 能力位只声明当前实际提供的算法；Web 设置的厂商、设备名和序列号持久化并由 SDF 返回 |
-| 随机数       | `SDF_GenerateRandom`                                                                                                              | openHiTLS 随机数，单次最多 4096 字节                                              |
-| SM2 外部运算 | `SDF_GenerateKeyPair_ECC`、`SDF_ExternalEncrypt_ECC`、`SDF_ExternalDecrypt_ECC`、`SDF_ExternalSign_ECC`、`SDF_ExternalVerify_ECC` | 真实 256 位 SM2；标准`ECCCipher` C1/C3/C2 与定长 r/s 映射                         |
-| RSA 密钥与运算 | `SDF_GenerateKeyPair_RSA`、`SDF_ExternalPublicKeyOperation_RSA`、`SDF_ExternalPrivateKeyOperation_RSA`、`SDF_InternalPublicKeyOperation_RSA`、`SDF_InternalPrivateKeyOperation_RSA` | 1024–2048 位 RSA，支持内外部无填充公私钥运算 |
-| RSA 会话密钥 | `SDF_ExportSignPublicKey_RSA`、`SDF_ExportEncPublicKey_RSA`、`SDF_GenerateKeyWithIPK_RSA`、`SDF_GenerateKeyWithEPK_RSA`、`SDF_ImportKeyWithISK_RSA` | PKCS#1 v1.5 包装 128/256 位会话密钥 |
-| SM2 内部密钥 | `SDF_ExportSignPublicKey_ECC`、`SDF_ExportEncPublicKey_ECC`                                                                       | 签名、加密为独立密钥对，可使用不同索引；只导出公钥                                |
-| 私钥权限     | `SDF_GetPrivateKeyAccessRight`、`SDF_ReleasePrivateKeyAccessRight`                                                                | 权限属于具体会话；错误口令、未授权和释放后调用均拒绝                              |
-| SM2 内部运算 | `SDF_InternalSign_ECC`、`SDF_InternalVerify_ECC`                                                                                  | 使用内部签名密钥；签名需要会话权限，验签使用内部公钥                              |
-| ECC 会话密钥 | `SDF_GenerateKeyWithIPK_ECC`、`SDF_GenerateKeyWithEPK_ECC`、`SDF_ImportKeyWithISK_ECC`                                            | 128/256 位会话密钥经 SM2 加密密钥封装；私钥导入需要权限                           |
-| KEK 会话密钥 | `SDF_GenerateKeyWithKEK`、`SDF_ImportKeyWithKEK`、`SDF_DestroyKey`                                                                | SM4-ECB 包装、KEK 按索引持久化、客户端仅持有不透明句柄                            |
-| 对称运算     | `SDF_Encrypt`、`SDF_Decrypt`                                                                                                      | SM4-ECB/CBC/CFB/OFB/CTR；ECB/CBC 不自动填充                                       |
-| MAC          | `SDF_CalculateMAC`                                                                                                                | SM4 CBC-MAC，16 字节输出                                                          |
-| 摘要         | `SDF_HashInit`、`SDF_HashUpdate`、`SDF_HashFinal`                                                                                 | SM3 分段摘要                                                                      |
-| 文件         | `SDF_CreateFile`、`SDF_ReadFile`、`SDF_WriteFile`、`SDF_DeleteFile`                                                               | 持久化、偏移读写、文件名十六进制编码，最大 1 MiB                                  |
+| 分类 | 接口与能力 | 已处理的主要情况 |
+| --- | --- | --- |
+| 设备和会话 | Open/Close Device、Open/Close Session、GetDeviceInfo | 不透明句柄、远端 ID、引用计数、无效/跨会话句柄拒绝、关闭会话清理 |
+| 随机数 | `SDF_GenerateRandom` | 1–4096 字节及非法参数 |
+| 摘要及 SM2 预处理 | HashInit/Update/Final | SM3、SHA-1/224/256/384/512；`SM3 + 公钥 + 非空 ID` 计算 `ZA` 后执行 `SM3(ZA||M)`；ID 最长 8191 字节，单次 Update 最长 32 KiB |
+| SM2 外部运算 | KeyPair、Encrypt/Decrypt、Sign/Verify | 256 位；`SM2_1` 签名，`SM2_2` 协商，`SM2_3` 加密；签名输入严格为 32 字节摘要 |
+| SM2 内部密钥 | 公钥导出、私钥权限、内部签名/验签、IPK/EPK/ISK | 签名/加密密钥分离；空口令和会话权限；禁用、损坏、无权限和错误索引拒绝 |
+| SM2 密钥协商 | 三个 ECC Agreement 接口 | 静态/临时密钥、双方 ID、64–512 位派生密钥、一次性协商句柄 |
+| RSA | 密钥生成、内外部运算、公钥导出、IPK/EPK/ISK | 1024–2048 位、索引/权限/缓冲区校验 |
+| 对称密钥 | KEK 生成/导入、DestroyKey | SM4-ECB 包装、不透明会话句柄、跨会话和重复销毁拒绝 |
+| 对称加解密 | 单包、Init/Update/Final、ExternalKey | SM4 ECB/CBC/CFB/OFB/CTR/XTS；ECB/CBC 无填充；XTS 双密钥和密文窃取 |
+| MAC/HMAC | MAC 单包/流式、HMAC 流式、ExternalKeyHMACInit | SM4 CBC-MAC；会话密钥或外部密钥 HMAC-SM3 |
+| 可鉴别加解密 | AuthEnc/AuthDec 单包及流式 | SM4-GCM/CCM；AAD、Nonce/IV、标签和总长度；篡改标签返回 `SDR_VERIFYERR` |
+| 用户文件 | Create/Read/Write/Delete | 持久化、偏移读写、名称/大小/边界校验 |
+| 附录 C VPN | IKE、EPK_IKE、IPSEC、EPK_IPSEC、SSL、EPK_SSL | HMAC PRF；普通接口返回会话密钥句柄，EPK 接口以 `SM2_3` 公钥包装；Salt 和 IV 情况 |
 
-## 内部密钥安全状态
+## 尚未实现
 
-- SM2 和 RSA 的签名/加密密钥分别存放在独立目录，索引范围为 1–1024。
-- 私钥访问控制码可以为空；非空口令使用随机盐和 20000 轮 SM3 派生，空口令使用设备根秘密派生，私钥均以 SM4-CTR 加密持久化。
-- 每条 SM2/RSA 记录把算法、类型、索引、公钥、加密私钥和元数据纳入 HMAC-SM3；每条 SM4 对称密钥记录把版本、算法、位数、索引和密钥材料纳入 HMAC-SM3。设备 HMAC 密钥在初始化时自动生成且无修改/导出接口。
-- 旧版 16 字节对称密钥文件在首次读取时自动迁移为带 HMAC-SM3 的版本化记录；校验失败的记录不能参与 KEK 密钥封装或导入。
-- 改索引时重新计算 HMAC；空口令私钥还会按新索引重新派生加密密钥。Web 提供显式完整性校验。
-- 口令明文、派生秘密、内部私钥、对称密钥和会话密钥均不通过管理 API 返回。
+仅附录 B 的 SM9 接口未实现。为保持 ABI 兼容仍导出相关符号，调用返回 `SDR_NOTSUPPORT`，不会伪造成功。
 
-## 部分实现
+## 密钥持久化和完整性
 
+- SM2/RSA 签名密钥与加密密钥独立，索引范围 1–1024。
+- 私钥访问控制码允许为空；私钥始终以 SM4-CTR 加密持久化。
+- SM2/RSA 和 SM4 对称密钥记录连同算法、类型、索引及元数据使用 HMAC-SM3 完整性保护。
+- HMAC 密钥来自初始化自动生成且不可经 Web 修改或导出的设备完整性密钥。
+- 改索引会重新保护记录；校验失败的记录不能参与密码运算。
 
-| 接口/能力                        | 已有部分                                                                                                            | 当前限制                                                       |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `SDF_HashInit` 的 SM2 Z 值预处理 | 普通摘要流程完整                                                                                                    | 传入公钥、身份或非零身份长度时明确返回`SDR_NOTSUPPORT`         |
-| SM4-GCM                          | 服务端密码引擎有算法映射                                                                                            | `SDF_AuthEnc*` / `SDF_AuthDec*` 的 AAD、标签和流式状态尚未接入 |
-| TCP 协议                         | Linux 与 Windows x64 客户端均已验证；固定宽度、网络字节序、64 位远程句柄                                            | 业务通道当前未启用 TLS，部署时应限制在受控网络                 |
-| 持久化                           | 对称密钥、内部 SM2/RSA 密钥、设备完整性密钥、用户文件、Web 状态、审计和备份均持久化；支持恢复与完全重置 | 数据卷属于软件安全边界，备份包未整包加密 |
-| 管理功能                         | 四角色 RBAC、管理员管理、设备信息、SM2/RSA/对称密钥、索引修改、HMAC 校验、RSA 自检、会话、备份恢复和 TXT 审计 | 按交付决定不提供独立 Unix 管理接口 |
+## 当前验证
 
-## 未实现，明确返回 `SDR_NOTSUPPORT`
+已完成全量构建和共享库导出检查，并通过设备/会话、随机数、4096 字节摘要单包、SM2 `ZA` 标准向量、SM2 外部运算、SM4 ECB/CBC/XTS、流式 CBC、CBC-MAC、HMAC-SM3、GCM/CCM 单包和流式及篡改标签错误分支。六个附录 C 接口均已执行；EPK 输出已使用对应 SM2 私钥成功解封装。
 
+ECC 密钥协商依赖安全管理员预置并授权内部 SM2 加密密钥。实现已通过构建和接口状态审查，正式发布前仍建议在隔离卷中补充双方权威标准向量。
 
-| 分类            | 接口                                                                                                                                                                                |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ECC 协商        | `SDF_GenerateAgreementDataWithECC`、`SDF_GenerateKeyWithECC`、`SDF_GenerateAgreementDataAndKeyWithECC`                                                                              |
-| 认证加密        | `SDF_AuthEnc`、`SDF_AuthDec` 及其 Init/Update/Final 接口                                                                                                                            |
-| 流式对称运算    | `SDF_EncryptInit/Update/Final`、`SDF_DecryptInit/Update/Final`                                                                                                                      |
-| 流式 MAC/HMAC   | `SDF_CalculateMACInit/Update/Final`、`SDF_HMACInit/Update/Final`                                                                                                                    |
-| 外部密钥扩展    | `SDF_ExternalKeyEncrypt`、`SDF_ExternalKeyDecrypt` 及 Init 接口、`SDF_ExternalKeyHMACInit`                                                                                          |
-| SM9 与 VPN 扩展 | `sdf.h` 中全部 SM9、IKE、IPSEC、SSL 扩展接口                                                                                                                                        |
+## 已知边界
 
-## 协议、容器和安全检查
+- 附录 C 当前采用项目实现的 HMAC PRF 配置；尚未取得 GM/T 0022/0024 权威向量验证，不能宣称通过 VPN 标准检测。
+- 规范 JSON 有少量 OCR 名称错误；实现和导出以函数描述及公开 `sdf.h` 为准。
+- TCP 18081 和 Web 18080 默认无 TLS/双向认证，只应部署在受控网络。
+- 软件数据卷和宿主机管理员属于安全边界，不具备硬件防拆能力。
 
-- 协议版本为 2.0；服务端在解析变长请求前验证结构体长度、声明长度、总长度和上限。
-- TCP 收发处理短读、短写、EOF、过长响应和错误响应头。
-- 会话密钥只存在于服务端内存；关闭会话时清理，`SDF_DestroyKey` 可提前销毁。
-- 用户文件名不直接用于路径拼接；对称密钥、内部密钥和用户文件目录均位于 `SDFX_DATA_DIR`。
-- Docker 运行镜像包含 `sdfxd`、openHiTLS 运行库、Web 后端/静态资源和 supervisord，不包含 Linux SDK、头文件或静态库。
-- Docker 健康检查同时探测 TCP 18081 和 Web `/api/health`，当前验证结果为 `healthy`。
-- 当前业务 TCP 通道没有 TLS 或双向认证，应只绑定本机或部署在受控网络中。
+## 授权
 
-## 当前测试门禁
-
-Docker Linux 端到端测试共 6 组：
-
-1. 设备和会话生命周期。
-2. 随机数和边界长度。
-3. SM3 分段摘要。
-4. SM2 外部密钥生成、加解密、签名验签和非法输入。
-5. 对称密钥包装/导入、SM4-CBC、SM4-MAC、会话密钥销毁和用户文件。
-6. 内部签名/验签、独立签名/加密索引、私钥访问权限、SM2 会话密钥封装/导入。
-7. 四角色 RBAC、空口令、SM2/RSA 改索引、非对称/对称密钥 HMAC-SM3 完整性校验、审计配置与 TXT 导出。
-8. Windows `tests/test1.c` SM2 回环和 `tests/rsa_e2e.c` RSA 内外部运算、IPK/ISK 会话密钥回环。
-
-当前 CTest 结果：**6/6 通过**。综合 RBAC/密钥完整性端到端测试、无令牌管理命令拒绝测试通过，容器重启后管理员状态、设备标识和内部密钥仍存在。Windows x64 SDK 已生成 DLL、导入库、头文件、配置和示例，并完成 Windows 到 Docker 的真实连接测试；模糊输入门禁仍待完成。
-## 项目授权
-
-CryptoKit SoftHSM 原创代码与修改采用 GNU AGPL v3.0 only
-（`AGPL-3.0-only`），源码仓库为
-<https://github.com/sawanolin/cryptokit-soft-hsm>。SDFX 和 openHiTLS 原始
-材料保留各自许可证；详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+原创代码和修改采用 GNU AGPL v3.0 only（`AGPL-3.0-only`）；SDFX、openHiTLS 原始材料保留各自许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
