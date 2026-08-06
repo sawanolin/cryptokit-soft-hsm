@@ -43,6 +43,16 @@ target_link_libraries(sdfx_sdk
     ${COMMON_LIBS}
 )
 
+if(WIN32)
+    # Keep the Windows SDK self-contained: do not ship a second runtime DLL.
+    target_link_libraries(sdfx_sdk
+        "-Wl,-Bstatic"
+        winpthread
+        "-Wl,-Bdynamic"
+    )
+    target_link_options(sdfx_sdk PRIVATE -static-libgcc)
+endif()
+
 # Set platform-specific public artifact names.
 if(WIN32)
     set_target_properties(sdfx_sdk PROPERTIES

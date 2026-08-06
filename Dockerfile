@@ -1,7 +1,17 @@
 ARG ALPINE_VERSION=3.24
+ARG ALPINE_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/alpine
+ARG PYPI_MIRROR=https://pypi.tuna.tsinghua.edu.cn/simple
 
-# 使用 Docker Hub 官方 Alpine 镜像，并保留镜像内置的 Alpine 官方软件仓库。
+# 使用 Docker Hub 官方 Alpine 基础镜像；容器内 apk 软件仓库切换为清华镜像。
 FROM alpine:${ALPINE_VERSION} AS alpine-base
+ARG ALPINE_MIRROR
+RUN set -eux; \
+    ALPINE_BRANCH="v$(cut -d. -f1,2 /etc/alpine-release)"; \
+    printf '%s\n' \
+        "${ALPINE_MIRROR}/${ALPINE_BRANCH}/main" \
+        "${ALPINE_MIRROR}/${ALPINE_BRANCH}/community" \
+        > /etc/apk/repositories; \
+    apk update
 
 # builder、web-builder 和运行阶段都需要 Python，复用公共层，
 # 避免多个阶段重复安装 python3。
@@ -14,7 +24,8 @@ RUN apk add --no-cache \
     cmake \
     ninja \
     perl \
-    linux-headers
+    linux-headers \
+    sqlite-dev
 
 COPY openhitls /src/openhitls
 RUN cmake -S /src/openhitls -B /build/openhitls -G Ninja \
@@ -36,18 +47,21 @@ RUN cmake -S /src/sdfx -B /build/sdfx -G Ninja \
     && cmake --install /build/sdfx
 
 FROM python-base AS web-builder
+ARG PYPI_MIRROR
 RUN apk add --no-cache py3-pip
 
 COPY web/requirements.txt /tmp/requirements.txt
 RUN python3 -m venv /opt/sdfx-web \
     && /opt/sdfx-web/bin/pip install \
     --no-cache-dir \
+    --disable-pip-version-check \
     --timeout 120 \
     --retries 10 \
+    --index-url "${PYPI_MIRROR}" \
     -r /tmp/requirements.txt
 
 FROM python-base AS runtime
-RUN apk add --no-cache supervisor \
+RUN apk add --no-cache supervisor sqlite-libs \
     && addgroup -S sdfx \
     && adduser -S -G sdfx sdfx
 

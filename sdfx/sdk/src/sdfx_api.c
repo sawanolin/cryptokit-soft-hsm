@@ -9,6 +9,7 @@
  */
 
 #include "sdf_internal.h"
+#include "log.h"
 #include <time.h>
 
 /* Initialization flag */
@@ -113,6 +114,8 @@ LONG sdf_send_request(ULONG cmd, const void *req_data, size_t req_size,
     sdfx_message_destroy(req_msg);
 
     if (ret != SDR_OK) {
+        LOG_MODULE_DEBUG("SDF", "%s failed, status=0x%08x.",
+                         sdfx_cmd_name(cmd), (unsigned int)ret);
         return ret;
     }
     if (resp_len == NULL || *resp_len < sizeof(sdfx_message_header_t)) {
@@ -126,7 +129,14 @@ LONG sdf_send_request(ULONG cmd, const void *req_data, size_t req_size,
         return SDR_PROTOCOL_ERROR;
     }
 
-    return (LONG)resp_msg->header.status;
+    LONG result = (LONG)resp_msg->header.status;
+    if (result == SDR_OK) {
+        LOG_MODULE_DEBUG("SDF", "%s ok.", sdfx_cmd_name(cmd));
+    } else {
+        LOG_MODULE_DEBUG("SDF", "%s failed, status=0x%08x.",
+                         sdfx_cmd_name(cmd), (unsigned int)result);
+    }
+    return result;
 }
 
 LONG sdf_get_server_session_id(HANDLE hSessionHandle, sdfx_remote_handle_t *server_session_id)

@@ -62,7 +62,7 @@ int crypto_hash_init(daemon_context_t *ctx, session_info_t *session, ULONG alg_i
         return SDR_INARGERR;
     }
     
-    LOG_DEBUG("Initializing hash for algorithm: 0x%lx", (unsigned long)alg_id);
+    
     
     /* Ensure hash engine is initialized */
     if (hash_crypto_engine_check() != 0) {
@@ -99,7 +99,7 @@ int crypto_hash_init(daemon_context_t *ctx, session_info_t *session, ULONG alg_i
     }
     
     session->hash_ctx = md_ctx;
-    LOG_DEBUG("Hash initialized successfully for algorithm: 0x%lx using openHiTLS", (unsigned long)alg_id);
+    
     return SDR_OK;
 }
 
@@ -181,8 +181,7 @@ int crypto_hash_init_sm2_preprocess(daemon_context_t *ctx, session_info_t *sessi
         return SDR_SYMOPERR;
     }
 
-    LOG_DEBUG("SM2 Z preprocessing initialized, identity length: %lu",
-              (unsigned long)id_len);
+    
     return SDR_OK;
 }
 /**
@@ -208,7 +207,7 @@ int crypto_hash_update(daemon_context_t *ctx, session_info_t *session,
         return SDR_SYMOPERR;
     }
     
-    LOG_DEBUG("Hash updated with %lu bytes using openHiTLS", (unsigned long)data_len);
+    
     return SDR_OK;
 }
 
@@ -242,7 +241,7 @@ int crypto_hash_final(daemon_context_t *ctx, session_info_t *session,
     CRYPT_EAL_MdFreeCtx(md_ctx);
     session->hash_ctx = NULL;
     
-    LOG_DEBUG("Hash finalized using openHiTLS, output length: %lu", (unsigned long)*hash_len);
+    
     return SDR_OK;
 }
 
@@ -256,8 +255,7 @@ int crypto_hash_digest(ULONG alg_id, const BYTE *data, ULONG data_len,
         return SDR_INARGERR;
     }
     
-    LOG_DEBUG("Computing hash digest for algorithm: 0x%lx, data length: %lu", 
-             (unsigned long)alg_id, (unsigned long)data_len);
+    
     
     /* Ensure hash engine is initialized */
     if (hash_crypto_engine_check() != 0) {
@@ -280,7 +278,6 @@ int crypto_hash_digest(ULONG alg_id, const BYTE *data, ULONG data_len,
     }
     
     *hash_len = output_len;
-    LOG_DEBUG("Hash computed using openHiTLS, algorithm: 0x%lx, output length: %lu", 
-             (unsigned long)alg_id, (unsigned long)*hash_len);
+    
     return SDR_OK;
 }

@@ -44,7 +44,9 @@ set(OpenHiTLS_ROOT_DIR "" CACHE PATH "Path to openHiTLS installation")
 option(OPENHITLS_USE_PKGCONFIG "Use pkg-config to find openHiTLS" ON)
 
 if(WIN32)
-    set(COMMON_LIBS ws2_32 winpthread)
+    # winpthread is linked statically into the SDK DLL below so the binary package
+    # contains only sdfapi_x64.dll.
+    set(COMMON_LIBS ws2_32)
 else()
     find_package(OpenHiTLS REQUIRED)
     include_directories(

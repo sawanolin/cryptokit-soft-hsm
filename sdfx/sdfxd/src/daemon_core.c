@@ -16,6 +16,7 @@
 #include <errno.h>
 
 #include "daemon_internal.h"
+#include "audit_db.h"
 #include "transport_interface.h" 
 #include "config.h"
 
@@ -26,6 +27,63 @@ typedef struct client_task_arg {
     daemon_context_t *ctx;
     transport_client_t client;
 } client_task_arg_t;
+
+static void log_sdf_call_summary(uint32_t command, const sdfx_message_t *request,
+                                 const sdfx_message_t *response, int ret,
+                                 const char *client_info)
+{
+    char extra[160] = "";
+    if (ret == SDR_OK && request != NULL &&
+        sdfx_ntohl(request->header.length) >= sizeof(sdfx_blob_req_t)) {
+        const sdfx_blob_req_t *blob = (const sdfx_blob_req_t *)request->data;
+        switch (command) {
+            case SDFX_CMD_GET_PRIVATE_ACCESS:
+            case SDFX_CMD_RELEASE_PRIVATE_ACCESS:
+            case SDFX_CMD_EXPORT_SIGN_PUB_ECC:
+            case SDFX_CMD_EXPORT_ENC_PUB_ECC:
+            case SDFX_CMD_EXPORT_SIGN_PUB_RSA:
+            case SDFX_CMD_EXPORT_ENC_PUB_RSA: {
+                uint32_t index = sdfx_ntohl(blob->param[0]);
+                if (index != 0) {
+                    snprintf(extra, sizeof(extra), ", uiKeyIndex=%lu",
+                             (unsigned long)index);
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+    if (ret == SDR_OK && command == SDFX_CMD_HASH_FINAL && response != NULL &&
+        sdfx_ntohl(response->header.length) >= sizeof(sdfx_hash_final_resp_t)) {
+        const sdfx_hash_final_resp_t *final = (const sdfx_hash_final_resp_t *)response->data;
+        uint32_t hash_len = sdfx_ntohl(final->hash_length);
+        if (hash_len == 0 ||
+            sdfx_ntohl(response->header.length) < sizeof(sdfx_hash_final_resp_t) + hash_len) {
+            snprintf(extra, sizeof(extra), ", sm3_hash = <invalid>");
+        } else {
+            char prefix[16];
+            size_t n = hash_len < 6 ? hash_len : 6;
+            char *p = prefix;
+            for (size_t i = 0; i < n; ++i) {
+                p += sprintf(p, "%02X", final->hash_data[i]);
+            }
+            if (hash_len > 6) {
+                p += sprintf(p, "...");
+            }
+            *p = '\0';
+            snprintf(extra, sizeof(extra), ", sm3_hash = %s", prefix);
+        }
+    }
+    audit_db_log_sdf_call(command, client_info, sdfx_cmd_name(command),
+                          ret == SDR_OK, extra);
+    if (ret == SDR_OK) {
+        LOG_MODULE_DEBUG("access", "%s ok%s.", sdfx_cmd_name(command), extra);
+    } else {
+        LOG_MODULE_DEBUG("access", "%s failed, status=0x%08x.",
+                         sdfx_cmd_name(command), (unsigned int)ret);
+    }
+}
 
 /* Client handler task function */
 static void client_handler_task(void *arg)
@@ -44,7 +102,6 @@ static void client_handler_task(void *arg)
         int recv_result = transport_recv_message(&client, buffer, sizeof(buffer), &received_size);
         
         if (recv_result == 2) {
-            LOG_DEBUG("Client closed connection");
             break;
         } else if (recv_result < 0) {
             LOG_ERROR("Failed to receive message from client");
@@ -54,27 +111,17 @@ static void client_handler_task(void *arg)
             continue;
         }
         
-        LOG_DEBUG("Securely received %zu bytes from client", received_size);
-        
         sdfx_message_t *request = (sdfx_message_t *)buffer;
-        
-        /* Process message.  Log metadata only; cryptographic payloads and secrets
-         * are deliberately never written to logs. */
+
+        uint32_t command = sdfx_ntohl(request->header.cmd);
+
+        /* Process message.  DEBUG logs one concise line per external SDF call,
+         * in the same granularity as the vhsm reference logs. */
         sdfx_message_t *response = NULL;
         size_t response_size = 0;
-        struct timespec started_at, finished_at;
-        clock_gettime(CLOCK_MONOTONIC, &started_at);
-        uint32_t command = sdfx_ntohl(request->header.cmd);
-        uint32_t session_id = sdfx_ntohl(request->header.session_id);
         int ret = protocol_handler_process_message(ctx, request, &response, &response_size);
-        clock_gettime(CLOCK_MONOTONIC, &finished_at);
-        long long elapsed_us = (finished_at.tv_sec - started_at.tv_sec) * 1000000LL +
-            (finished_at.tv_nsec - started_at.tv_nsec) / 1000LL;
-        LOG_MODULE_INFO("access",
-            "client=%s command=0x%04x session=%u request_bytes=%zu response_bytes=%zu status=0x%08x elapsed_us=%lld",
-            client.client_info, command, session_id, received_size,
-            response_size, (unsigned int)ret, elapsed_us);
-        
+        log_sdf_call_summary(command, request, response, ret, client.client_info);
+
         if (response != NULL) {
             /* Send response */
             ssize_t sent_size = transport_send(&client, response, response_size);
@@ -88,8 +135,6 @@ static void client_handler_task(void *arg)
     /* Close client connection and clean up */
     transport_close_client(&client);
     free(task_arg);
-    
-    LOG_DEBUG("Client handler task completed");
 }
 
 static void* accept_thread(void *arg)
@@ -134,7 +179,7 @@ static void* accept_thread(void *arg)
             continue;
         }
         
-        LOG_DEBUG("Client task submitted to thread pool");
+        
     }
     
     LOG_INFO("Accept thread exiting");

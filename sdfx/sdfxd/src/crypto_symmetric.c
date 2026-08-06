@@ -174,8 +174,7 @@ int crypto_symmetric_encrypt(ULONG alg_id, const BYTE *key, ULONG key_len,
     /* Cleanup context */
     CRYPT_EAL_CipherFreeCtx(ctx);
     
-    LOG_DEBUG("Symmetric encryption completed, algorithm: 0x%lx, input: %lu bytes, output: %lu bytes",
-             (unsigned long)alg_id, (unsigned long)plaintext_len, (unsigned long)*ciphertext_len);
+    
     return SDR_OK;
 }
 
@@ -260,7 +259,6 @@ int crypto_symmetric_decrypt(ULONG alg_id, const BYTE *key, ULONG key_len,
     /* Cleanup context */
     CRYPT_EAL_CipherFreeCtx(ctx);
     
-    LOG_DEBUG("Symmetric decryption completed, algorithm: 0x%lx, input: %lu bytes, output: %lu bytes",
-             (unsigned long)alg_id, (unsigned long)ciphertext_len, (unsigned long)*plaintext_len);
+    
     return SDR_OK;
 }

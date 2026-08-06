@@ -1,6 +1,6 @@
 services:
   softhsm:
-    image: sawanolin/cryptokit-soft-hsm:1.0.1
+    image: sawanolin/cryptokit-soft-hsm:1.1.1
     build:
       context: .
       dockerfile: Dockerfile

@@ -127,7 +127,7 @@ uint32_t session_manager_create_session(daemon_context_t *ctx, uint32_t device_h
     
     pthread_mutex_unlock(&ctx->sessions_mutex);
     
-    LOG_DEBUG("Created session %u for device %u", session_id, device_handle);
+    
     return session_id;
 }
 
@@ -165,10 +165,9 @@ int session_manager_close_session(daemon_context_t *ctx, uint32_t session_id)
                 pthread_mutex_destroy(&current->object_mutex);
                 pthread_mutex_destroy(&current->ref_mutex);
                 free(current);
-                LOG_DEBUG("Session %u freed immediately", session_id);
+                
             } else {
-                LOG_DEBUG("Session %u marked inactive, %d references remaining", 
-                         session_id, final_ref_count);
+                
             }
             
             pthread_mutex_unlock(&ctx->sessions_mutex);
@@ -275,7 +274,7 @@ void session_manager_put_session(session_info_t *session)
     pthread_mutex_unlock(&session->ref_mutex);
     /* Free session if reference count reaches zero and session is inactive */
     if (final_ref_count <= 0 && !session->active) {
-        LOG_DEBUG("Freeing session %u (ref_count = %d)", session->session_id, final_ref_count);
+        
         session_objects_cleanup(session);
         pthread_mutex_destroy(&session->object_mutex);
         pthread_mutex_destroy(&session->ref_mutex);
@@ -290,7 +289,7 @@ uint32_t device_manager_create_device(daemon_context_t *ctx)
     }
     
     uint32_t device_id = ctx->next_device_id++;
-    LOG_DEBUG("Created device %u", device_id);
+    
     return device_id;
 }
 

@@ -520,6 +520,96 @@ static inline sdfx_remote_handle_t sdfx_ntohll(sdfx_remote_handle_t value)
     return sdfx_htonll(value);
 }
 
+/**
+ * @brief Map a protocol command code to the external SDF API function name.
+ * Used by DEBUG logging so call traces show the SDF function being invoked.
+ */
+static inline const char *sdfx_cmd_name(uint32_t cmd)
+{
+    switch (cmd) {
+        case SDFX_CMD_OPEN_DEVICE:           return "SDF_OpenDevice";
+        case SDFX_CMD_CLOSE_DEVICE:          return "SDF_CloseDevice";
+        case SDFX_CMD_OPEN_SESSION:          return "SDF_OpenSession";
+        case SDFX_CMD_CLOSE_SESSION:         return "SDF_CloseSession";
+        case SDFX_CMD_GET_DEVICE_INFO:       return "SDF_GetDeviceInfo";
+        case SDFX_CMD_GENERATE_RANDOM:       return "SDF_GenerateRandom";
+        case SDFX_CMD_HASH_INIT:             return "SDF_HashInit";
+        case SDFX_CMD_HASH_UPDATE:           return "SDF_HashUpdate";
+        case SDFX_CMD_HASH_FINAL:            return "SDF_HashFinal";
+        case SDFX_CMD_ENCRYPT:               return "SDF_Encrypt";
+        case SDFX_CMD_DECRYPT:               return "SDF_Decrypt";
+        case SDFX_CMD_INTERNAL_SIGN_ECC:     return "SDF_InternalSign_ECC";
+        case SDFX_CMD_INTERNAL_VERIFY_ECC:   return "SDF_InternalVerify_ECC";
+        case SDFX_CMD_EXTERNAL_ENCRYPT_ECC:  return "SDF_ExternalEncrypt_ECC";
+        case SDFX_CMD_EXTERNAL_DECRYPT_ECC:  return "SDF_ExternalDecrypt_ECC";
+        case SDFX_CMD_GENERATE_KEYPAIR_ECC:  return "SDF_GenerateKeyPair_ECC";
+        case SDFX_CMD_EXTERNAL_SIGN_ECC:     return "SDF_ExternalSign_ECC";
+        case SDFX_CMD_EXTERNAL_VERIFY_ECC:   return "SDF_ExternalVerify_ECC";
+        case SDFX_CMD_GENERATE_KEY_KEK:      return "SDF_GenerateKeyWithKEK";
+        case SDFX_CMD_IMPORT_KEY_KEK:        return "SDF_ImportKeyWithKEK";
+        case SDFX_CMD_DESTROY_KEY:           return "SDF_DestroyKey";
+        case SDFX_CMD_CALCULATE_MAC:         return "SDF_CalculateMAC";
+        case SDFX_CMD_CREATE_FILE:           return "SDF_CreateFile";
+        case SDFX_CMD_READ_FILE:             return "SDF_ReadFile";
+        case SDFX_CMD_WRITE_FILE:            return "SDF_WriteFile";
+        case SDFX_CMD_DELETE_FILE:           return "SDF_DeleteFile";
+        case SDFX_CMD_GET_PRIVATE_ACCESS:    return "SDF_GetPrivateKeyAccessRight";
+        case SDFX_CMD_RELEASE_PRIVATE_ACCESS:return "SDF_ReleasePrivateKeyAccessRight";
+        case SDFX_CMD_EXPORT_SIGN_PUB_ECC:   return "SDF_ExportSignPublicKey_ECC";
+        case SDFX_CMD_EXPORT_ENC_PUB_ECC:    return "SDF_ExportEncPublicKey_ECC";
+        case SDFX_CMD_GENERATE_KEY_IPK_ECC:  return "SDF_GenerateKeyWithIPK_ECC";
+        case SDFX_CMD_GENERATE_KEY_EPK_ECC:  return "SDF_GenerateKeyWithEPK_ECC";
+        case SDFX_CMD_IMPORT_KEY_ISK_ECC:    return "SDF_ImportKeyWithISK_ECC";
+        case SDFX_CMD_ADMIN_STATUS:          return "AdminStatus";
+        case SDFX_CMD_ADMIN_KEY_LIST:        return "AdminKeyList";
+        case SDFX_CMD_ADMIN_KEY_CREATE:      return "AdminKeyCreate";
+        case SDFX_CMD_ADMIN_KEY_DELETE:      return "AdminKeyDelete";
+        case SDFX_CMD_ADMIN_KEY_ENABLE:      return "AdminKeyEnable";
+        case SDFX_CMD_ADMIN_KEY_DISABLE:     return "AdminKeyDisable";
+        case SDFX_CMD_ADMIN_KEY_PUBLIC:      return "AdminKeyPublic";
+        case SDFX_CMD_ADMIN_KEY_PASSWORD:    return "AdminKeyPassword";
+        case SDFX_CMD_ADMIN_DEVICE_CONFIG:   return "AdminDeviceConfig";
+        case SDFX_CMD_ADMIN_SESSION_LIST:    return "AdminSessionList";
+        case SDFX_CMD_ADMIN_SESSION_CLOSE:   return "AdminSessionClose";
+        case SDFX_CMD_ADMIN_KEK_LIST:        return "AdminKekList";
+        case SDFX_CMD_ADMIN_KEK_CREATE:      return "AdminKekCreate";
+        case SDFX_CMD_ADMIN_KEK_DELETE:      return "AdminKekDelete";
+        case SDFX_CMD_ADMIN_KEK_ENABLE:      return "AdminKekEnable";
+        case SDFX_CMD_ADMIN_KEK_DISABLE:     return "AdminKekDisable";
+        case SDFX_CMD_ADMIN_BACKUP_LIST:     return "AdminBackupList";
+        case SDFX_CMD_ADMIN_BACKUP_CREATE:   return "AdminBackupCreate";
+        case SDFX_CMD_ADMIN_BACKUP_RESTORE:  return "AdminBackupRestore";
+        case SDFX_CMD_ADMIN_BACKUP_DELETE:   return "AdminBackupDelete";
+        case SDFX_CMD_ADMIN_DEVICE_RESET:    return "AdminDeviceReset";
+        case SDFX_CMD_ADMIN_SELFTEST:        return "AdminSelfTest";
+        case SDFX_CMD_ADMIN_INTEGRITY_INIT:  return "AdminIntegrityInit";
+        case SDFX_CMD_ADMIN_KEY_VERIFY:      return "AdminKeyVerify";
+        case SDFX_CMD_ADMIN_KEY_REINDEX:     return "AdminKeyReindex";
+        case SDFX_CMD_ADMIN_RSA_KEY_LIST:    return "AdminRsaKeyList";
+        case SDFX_CMD_ADMIN_RSA_KEY_CREATE:  return "AdminRsaKeyCreate";
+        case SDFX_CMD_ADMIN_RSA_KEY_DELETE:  return "AdminRsaKeyDelete";
+        case SDFX_CMD_ADMIN_RSA_KEY_ENABLE:  return "AdminRsaKeyEnable";
+        case SDFX_CMD_ADMIN_RSA_KEY_DISABLE: return "AdminRsaKeyDisable";
+        case SDFX_CMD_ADMIN_RSA_KEY_PUBLIC:  return "AdminRsaKeyPublic";
+        case SDFX_CMD_ADMIN_RSA_KEY_PASSWORD:return "AdminRsaKeyPassword";
+        case SDFX_CMD_ADMIN_RSA_KEY_VERIFY:  return "AdminRsaKeyVerify";
+        case SDFX_CMD_ADMIN_RSA_KEY_REINDEX: return "AdminRsaKeyReindex";
+        case SDFX_CMD_EXPORT_SIGN_PUB_RSA:   return "SDF_ExportSignPublicKey_RSA";
+        case SDFX_CMD_EXPORT_ENC_PUB_RSA:    return "SDF_ExportEncPublicKey_RSA";
+        case SDFX_CMD_GENERATE_KEY_IPK_RSA:  return "SDF_GenerateKeyWithIPK_RSA";
+        case SDFX_CMD_GENERATE_KEY_EPK_RSA:  return "SDF_GenerateKeyWithEPK_RSA";
+        case SDFX_CMD_IMPORT_KEY_ISK_RSA:    return "SDF_ImportKeyWithISK_RSA";
+        case SDFX_CMD_EXTERNAL_PUBLIC_RSA:   return "SDF_ExternalPublicKeyOperation_RSA";
+        case SDFX_CMD_INTERNAL_PUBLIC_RSA:   return "SDF_InternalPublicKeyOperation_RSA";
+        case SDFX_CMD_INTERNAL_PRIVATE_RSA:  return "SDF_InternalPrivateKeyOperation_RSA";
+        case SDFX_CMD_GENERATE_KEYPAIR_RSA:  return "SDF_GenerateKeyPair_RSA";
+        case SDFX_CMD_EXTERNAL_PRIVATE_RSA:  return "SDF_ExternalPrivateKeyOperation_RSA";
+        case SDFX_CMD_ADMIN_KEK_VERIFY:      return "AdminKekVerify";
+        case SDFX_CMD_EXTENDED_OPERATION:    return "SDF_ExtendedOperation";
+        default:                             return "Unknown";
+    }
+}
+
 #ifdef __cplusplus
 }
 #endif

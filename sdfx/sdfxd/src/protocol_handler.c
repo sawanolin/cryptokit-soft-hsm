@@ -36,7 +36,7 @@ static DEVICEINFO g_device_info = {
 static int handle_open_device(daemon_context_t *ctx, const sdfx_open_device_req_t *req,
                               sdfx_open_device_resp_t *resp)
 {
-    LOG_DEBUG("Handling open device request");
+    
     
     uint32_t device_id = device_manager_create_device(ctx);
     if (device_id == 0) {
@@ -44,14 +44,14 @@ static int handle_open_device(daemon_context_t *ctx, const sdfx_open_device_req_
     }
     
     resp->device_handle = sdfx_htonll(device_id);
-    LOG_INFO("Device opened, device_id = %u", device_id);
+
     return SDR_OK;
 }
 
 static int handle_close_device(daemon_context_t *ctx, const sdfx_close_device_req_t *req,
                                sdfx_close_device_resp_t *resp)
 {
-    LOG_DEBUG("Handling close device request");
+    
     
     uint32_t device_id = (uint32_t)sdfx_ntohll(req->device_handle);
     int ret = device_manager_validate_device(ctx, device_id);
@@ -59,14 +59,14 @@ static int handle_close_device(daemon_context_t *ctx, const sdfx_close_device_re
         return ret;
     }
     
-    LOG_INFO("Device closed, device_id = %u", device_id);
+
     return SDR_OK;
 }
 
 static int handle_open_session(daemon_context_t *ctx, const sdfx_open_session_req_t *req,
                                sdfx_open_session_resp_t *resp)
 {
-    LOG_DEBUG("Handling open session request");
+    
     
     uint32_t device_id = (uint32_t)sdfx_ntohll(req->device_handle);
     int ret = device_manager_validate_device(ctx, device_id);
@@ -80,26 +80,26 @@ static int handle_open_session(daemon_context_t *ctx, const sdfx_open_session_re
     }
     
     resp->session_handle = sdfx_htonll(session_id);
-    LOG_INFO("Session opened, session_id = %u, device_id = %u",
-             session_id, device_id);
+
+
     return SDR_OK;
 }
 
 static int handle_close_session(daemon_context_t *ctx, const sdfx_close_session_req_t *req,
                                 sdfx_close_session_resp_t *resp)
 {
-    LOG_DEBUG("Handling close session request");
+    
     
     uint32_t session_id = (uint32_t)sdfx_ntohll(req->session_handle);
     int ret = session_manager_close_session(ctx, session_id);
-    LOG_INFO("Session closed, session_id = %u", session_id);
+
     return ret;
 }
 
 static int handle_get_device_info(daemon_context_t *ctx, const sdfx_get_device_info_req_t *req,
                                   sdfx_get_device_info_resp_t *resp)
 {
-    LOG_DEBUG("Handling get device info request");
+    
     
     uint32_t session_id = (uint32_t)sdfx_ntohll(req->session_handle);
     int ret = session_manager_validate_session(ctx, session_id);
@@ -119,7 +119,7 @@ static int handle_generate_random(daemon_context_t *ctx, const sdfx_generate_ran
     uint32_t session_id = (uint32_t)sdfx_ntohll(req->session_handle);
     uint32_t length = sdfx_ntohl(req->length);
     
-    LOG_DEBUG("Handling generate random request, length = %u", length);
+    
     
     int ret = session_manager_validate_session(ctx, session_id);
     if (ret != SDR_OK) {
@@ -142,7 +142,7 @@ static int handle_generate_random(daemon_context_t *ctx, const sdfx_generate_ran
     }
     
     resp->length = sdfx_htonl(length);
-    LOG_DEBUG("Generated %u bytes of random data", length);
+    
     return SDR_OK;
 }
 
@@ -153,8 +153,7 @@ static int handle_hash_init(daemon_context_t *ctx, const sdfx_hash_init_req_t *r
     ULONG alg_id = sdfx_ntohl(req->alg_id);
     ULONG id_length = sdfx_ntohl(req->id_length);
     
-    LOG_DEBUG("Handling hash init request, session_id = %u, alg_id = 0x%lx", 
-             session_id, (unsigned long)alg_id);
+    
     
     int ret = session_manager_validate_session(ctx, session_id);
     if (ret != SDR_OK) {
@@ -187,7 +186,7 @@ static int handle_hash_init(daemon_context_t *ctx, const sdfx_hash_init_req_t *r
     
     session_manager_put_session(session);  /* Release session reference */
     
-    LOG_DEBUG("Hash initialized successfully");
+    
     return SDR_OK;
 }
 
@@ -197,8 +196,7 @@ static int handle_hash_update(daemon_context_t *ctx, const sdfx_hash_update_req_
     uint32_t session_id = (uint32_t)sdfx_ntohll(req->session_handle);
     ULONG data_length = sdfx_ntohl(req->data_length);
     
-    LOG_DEBUG("Handling hash update request, session_id = %u, data_length = %lu", 
-             session_id, (unsigned long)data_length);
+    
     
     int ret = session_manager_validate_session(ctx, session_id);
     if (ret != SDR_OK) {
@@ -229,7 +227,7 @@ static int handle_hash_update(daemon_context_t *ctx, const sdfx_hash_update_req_
     
     session_manager_put_session(session);  /* Release session reference */
     
-    LOG_DEBUG("Hash updated successfully");
+    
     return SDR_OK;
 }
 
@@ -238,7 +236,7 @@ static int handle_hash_final(daemon_context_t *ctx, const sdfx_hash_final_req_t 
 {
     uint32_t session_id = (uint32_t)sdfx_ntohll(req->session_handle);
     
-    LOG_DEBUG("Handling hash final request, session_id = %u", session_id);
+    
     
     int ret = session_manager_validate_session(ctx, session_id);
     if (ret != SDR_OK) {
@@ -261,23 +259,21 @@ static int handle_hash_final(daemon_context_t *ctx, const sdfx_hash_final_req_t 
     session_manager_put_session(session);  /* Release session reference */
     
     resp->hash_length = sdfx_htonl(hash_length);
-    LOG_DEBUG("Hash finalized successfully, length = %lu", (unsigned long)hash_length);
+    
     return SDR_OK;
 }
 
 static int handle_encrypt(daemon_context_t *ctx, const sdfx_encrypt_req_t *req,
                          sdfx_encrypt_resp_t *resp)
 {
-    LOG_DEBUG("Handling encrypt request");
+    
     
     uint32_t session_id = (uint32_t)sdfx_ntohll(req->session_handle);
     ULONG alg_id = sdfx_ntohl(req->alg_id);
     ULONG iv_length = sdfx_ntohl(req->iv_length);
     ULONG data_length = sdfx_ntohl(req->data_length);
     
-    LOG_DEBUG("Encrypt: session=0x%lx, alg=0x%lx, iv_len=%lu, data_len=%lu", 
-             (unsigned long)session_id, (unsigned long)alg_id, 
-             (unsigned long)iv_length, (unsigned long)data_length);
+    
     
     /* Validate session */
     int ret_validate = session_manager_validate_session(ctx, session_id);
@@ -321,7 +317,7 @@ static int handle_encrypt(daemon_context_t *ctx, const sdfx_encrypt_req_t *req,
         /* Convert ciphertext length to network byte order and copy data */
         resp->enc_data_length = sdfx_htonl(ciphertext_len);
         memcpy(resp->enc_data, ciphertext, ciphertext_len);
-        LOG_DEBUG("Encryption successful, output length: %lu", (unsigned long)ciphertext_len);
+        
     } else {
         LOG_ERROR("Encryption failed: 0x%x", result);
     }
@@ -334,16 +330,14 @@ static int handle_encrypt(daemon_context_t *ctx, const sdfx_encrypt_req_t *req,
 static int handle_decrypt(daemon_context_t *ctx, const sdfx_decrypt_req_t *req,
                          sdfx_decrypt_resp_t *resp)
 {
-    LOG_DEBUG("Handling decrypt request");
+    
     
     uint32_t session_id = (uint32_t)sdfx_ntohll(req->session_handle);
     ULONG alg_id = sdfx_ntohl(req->alg_id);
     ULONG iv_length = sdfx_ntohl(req->iv_length);
     ULONG enc_data_length = sdfx_ntohl(req->enc_data_length);
     
-    LOG_DEBUG("Decrypt: session=0x%lx, alg=0x%lx, iv_len=%lu, enc_len=%lu", 
-             (unsigned long)session_id, (unsigned long)alg_id, 
-             (unsigned long)iv_length, (unsigned long)enc_data_length);
+    
     
     /* Validate session */
     int ret_validate = session_manager_validate_session(ctx, session_id);
@@ -387,7 +381,7 @@ static int handle_decrypt(daemon_context_t *ctx, const sdfx_decrypt_req_t *req,
         /* Convert plaintext length to network byte order and copy data */
         resp->data_length = sdfx_htonl(plaintext_len);
         memcpy(resp->data, plaintext, plaintext_len);
-        LOG_DEBUG("Decryption successful, output length: %lu", (unsigned long)plaintext_len);
+        
     } else {
         LOG_ERROR("Decryption failed: 0x%x", result);
     }
@@ -447,7 +441,7 @@ static int handle_generate_keypair_ecc(daemon_context_t *ctx,
         return SDR_INARGERR;
     }
     
-    LOG_DEBUG("Handling ECC key pair generation request");
+    
     
     /* Validate algorithm ID */
     ULONG alg_id = sdfx_ntohl(req->alg_id);
@@ -461,7 +455,7 @@ static int handle_generate_keypair_ecc(daemon_context_t *ctx,
     int result = crypto_sm2_generate_keypair(&resp->public_key, &resp->private_key);
     
     if (result == SDR_OK) {
-        LOG_DEBUG("SM2 key pair generated successfully");
+        
     } else {
         LOG_ERROR("SM2 key pair generation failed: 0x%x", result);
     }
@@ -480,7 +474,7 @@ static int handle_external_encrypt_ecc(daemon_context_t *ctx,
         return SDR_INARGERR;
     }
     
-    LOG_DEBUG("Handling external ECC encrypt request");
+    
     
     /* Validate algorithm ID */
     ULONG alg_id = sdfx_ntohl(req->alg_id);
@@ -502,7 +496,7 @@ static int handle_external_encrypt_ecc(daemon_context_t *ctx,
     
     if (result == SDR_OK) {
         resp->cipher.L = sdfx_htonl(cipher_len);
-        LOG_DEBUG("SM2 encryption completed: %lu bytes -> %lu bytes", data_length, cipher_len);
+        
     } else {
         LOG_ERROR("SM2 encryption failed: 0x%x", result);
     }
@@ -521,7 +515,7 @@ static int handle_external_decrypt_ecc(daemon_context_t *ctx,
         return SDR_INARGERR;
     }
     
-    LOG_DEBUG("Handling external ECC decrypt request");
+    
     
     /* Validate algorithm ID */
     ULONG alg_id = sdfx_ntohl(req->alg_id);
@@ -549,7 +543,7 @@ static int handle_external_decrypt_ecc(daemon_context_t *ctx,
     
     if (result == SDR_OK) {
         resp->data_length = sdfx_htonl(plaintext_len);
-        LOG_DEBUG("SM2 decryption completed: %lu bytes -> %lu bytes", cipher_len, plaintext_len);
+        
     } else {
         LOG_ERROR("SM2 decryption failed: 0x%x", result);
     }
@@ -568,7 +562,7 @@ static int handle_external_sign_ecc(daemon_context_t *ctx,
         return SDR_INARGERR;
     }
     
-    LOG_DEBUG("Handling external ECC sign request");
+    
     
     /* Validate algorithm ID */
     ULONG alg_id = sdfx_ntohl(req->alg_id);
@@ -590,8 +584,7 @@ static int handle_external_sign_ecc(daemon_context_t *ctx,
     
     if (result == SDR_OK) {
         resp->signature_length = sdfx_htonl(signature_len);
-        LOG_DEBUG("SM2 signature completed: %lu bytes data -> %lu bytes signature", 
-                  data_length, signature_len);
+        
     } else {
         LOG_ERROR("SM2 signature failed: 0x%x", result);
     }
@@ -610,7 +603,7 @@ static int handle_external_verify_ecc(daemon_context_t *ctx,
         return SDR_INARGERR;
     }
     
-    LOG_DEBUG("Handling external ECC verify request");
+    
     
     /* Validate algorithm ID */
     ULONG alg_id = sdfx_ntohl(req->alg_id);
@@ -639,9 +632,9 @@ static int handle_external_verify_ecc(daemon_context_t *ctx,
     resp->result = sdfx_htonl((result == SDR_OK) ? 0 : 1);
     
     if (result == SDR_OK) {
-        LOG_DEBUG("SM2 verification succeeded");
+        
     } else {
-        LOG_DEBUG("SM2 verification failed: 0x%x", result);
+        
         result = SDR_OK;  /* Verification failure is not an error, distinguished by the result field */
     }
     
@@ -1641,7 +1634,7 @@ int protocol_handler_process_message(daemon_context_t *ctx,
         return validation_result;
     }
     
-    LOG_DEBUG("Processing command %lu", (unsigned long)cmd);
+    
     ctx->total_requests++;
     
     /* Determine response data size based on command type */
@@ -2027,6 +2020,6 @@ int protocol_handler_process_message(daemon_context_t *ctx,
 
     (*response)->header.status = sdfx_htonl(result);
     
-    LOG_DEBUG("Command %lu processed, result = %ld", (unsigned long)cmd, result);
+    
     return result;
 }

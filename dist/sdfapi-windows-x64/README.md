@@ -2,24 +2,25 @@
 
 该 SDK 通过 TCP `服务器IP:18081` 调用 Docker 中的 `sdfxd`。客户端 DLL 不链接 openHiTLS，随机数和密码运算都在 Linux 服务端执行。
 
-## 包内容
+## 最小化包内容
 
 ```text
-bin/sdfapi_x64.dll              SDF 客户端 DLL
-bin/libwinpthread-1.dll         MinGW 运行依赖
-lib/sdfapi_x64.lib              MSVC x64 COFF 导入库
+bin/sdfapi_x64.dll              唯一需要随应用部署的 SDK DLL
+lib/sdfapi_x64.lib              MSVC x64 导入库
 lib/sdfapi_x64.dll.a            MinGW x64 导入库
-include/sdf.h                   GM/T 0018 风格公开头文件
-config/sdfapi.ini               TCP 客户端配置模板
-examples/                       C 示例
-verify_exports.ps1              DLL 导出检查
+include/sdf.h                   SDF 公开接口
+include/sdf_types.h             公开类型定义
+include/sdf_err.h               公开错误码
+config/sdfapi.ini               唯一配置模板
+licenses/                       必须保留的许可证与第三方声明
 SHA256SUMS                      包内文件校验和
-licenses/                       许可证与第三方声明
 ```
+
+SDK 不再包含 `libwinpthread-1.dll`：线程运行库已经静态链接进 `sdfapi_x64.dll`。包内也不包含测试 EXE、OBJ、示例源码、CMake/pkg-config 文件或重复 INI。测试源码仍保留在仓库 `tests/` 中，供发布前验证使用。
 
 ## 配置
 
-将 `config/sdfapi.ini` 复制到应用当前工作目录，命名为 `sdfapi.ini`：
+将 `config/sdfapi.ini` 复制到应用程序的工作目录，命名为 `sdfapi.ini`：
 
 ```ini
 [transport]
@@ -34,18 +35,16 @@ retry_count = 2
 
 `tcp_host` 必须是密码机服务器的实际地址；`0.0.0.0` 只能用于服务端监听，不能作为客户端目标。若程序和 Docker 位于同一台 Windows 主机，可使用 `127.0.0.1`。
 
-DLL 会优先读取当前目录的 `sdfapi.ini`，也会检查 `config/sdfapi.ini`。应用发布时应把配置、`sdfapi_x64.dll` 和 `libwinpthread-1.dll` 放在可找到的位置。
+发行包只保留 `config/sdfapi.ini` 这一份模板。DLL 会优先读取应用工作目录中的 `sdfapi.ini`，也会检查其 `config/sdfapi.ini`；复制动作由使用方部署时完成，不在 SDK ZIP 内放置第二份配置。
 
 ## MSVC 使用
 
-在 “x64 Native Tools Command Prompt for Visual Studio” 中：
-
 ```bat
-cl /nologo /W4 /utf-8 /Iinclude examples\basic_test.c ^
-  /link /LIBPATH:lib sdfapi_x64.lib /OUT:bin\basic_test.exe
+cl /nologo /W4 /utf-8 /Iinclude your_program.c ^
+  /link /LIBPATH:lib sdfapi_x64.lib /OUT:your_program.exe
 ```
 
-也可以运行 `build_examples.bat` 重建全部示例。包内已附带 MinGW x64 构建的示例，包括基础连接、随机数、SM2/SM3/SM4、文件和 2048 位 RSA 外部私钥/公钥回环。
+把 `bin\sdfapi_x64.dll` 放到程序旁，并按上一节准备 `sdfapi.ini`。MinGW 使用 `lib/sdfapi_x64.dll.a`；不使用的导入库可以不复制到最终应用目录。
 
 ## 已实现能力
 
@@ -59,24 +58,18 @@ cl /nologo /W4 /utf-8 /Iinclude examples\basic_test.c ^
 - 对称包装密钥（标准接口名称保留 KEK）；
 - 用户文件接口。
 
-私钥访问控制码允许长度为 0。空口令密钥不要求调用 `SDF_GetPrivateKeyAccessRight`，但服务端私钥仍为加密保存。设置了口令的内部密钥必须先取得会话级访问权。签名与加密密钥索引可以不同，应以 Web 安全管理员配置的实际索引为准。服务端对持久化 SM2/RSA 非对称密钥和 SM4 对称密钥记录及其索引统一执行 HMAC-SM3 完整性校验，受损记录不会用于密码运算。
+私钥访问控制码允许长度为 0。服务端对持久化 SM2/RSA 非对称密钥和 SM4 对称密钥记录及其索引统一执行 HMAC-SM3 完整性校验。当前仅 SM9 声明返回 `SDR_NOTSUPPORT`。
 
-当前仅 SM9 声明返回 `SDR_NOTSUPPORT`。本目录中的预构建 DLL 必须在发布新版前按当前源码重新生成；只检查导出符号不能证明旧 DLL 已包含新实现。
+## 发布验证
 
-## 发布前重建
-
-本次新增接口涉及 SDK 源码，不能继续发布旧的 `bin/sdfapi_x64.dll`。应先按仓库发布指南重建 DLL、两个导入库和示例，再更新 `SHA256SUMS`。
-
-## 验证
+在仓库根目录执行：
 
 ```powershell
-.\verify_exports.ps1
-Get-FileHash -Algorithm SHA256 .\bin\sdfapi_x64.dll
+.\scripts\build_windows_sdk.ps1
+.\scripts\package_windows_sdk.ps1 -Version 1.0.0 -Force
 ```
 
-`verify_exports.ps1` 使用 `dumpbin` 或 `objdump` 检查 `sdf.h` 声明的全部 94 个 `SDF_*` 导出。`SHA256SUMS` 覆盖除自身外的包内文件。
-
-仓库级回归还包括 `tests/test1.c` 的空口令 SM2 封装回环和 `tests/rsa_e2e.c` 的 RSA 内外部运算、IPK/ISK 会话密钥回环；运行前必须在隔离设备卷中由安全管理员创建测试索引。
+检查脚本会核对 `sdf.h` 声明的全部 `SDF_*` 导出，并确认 DLL 不依赖 `libwinpthread-1.dll`。打包脚本只按白名单复制上述最小文件，生成 `release/sdfapi-windows-x64-版本.zip` 和新的 `SHA256SUMS`。
 
 ## 安全提示
 
@@ -87,4 +80,4 @@ Get-FileHash -Algorithm SHA256 .\bin\sdfapi_x64.dll
 
 ## 许可证
 
-CryptoKit SoftHSM 原创代码与修改采用 GNU AGPL v3.0 only（`AGPL-3.0-only`），对应源码位于 <https://github.com/sawanolin/cryptokit-soft-hsm>。SDK 包内 `licenses/` 目录包含完整 AGPL 正文以及 SDFX、openHiTLS 原许可证和归属声明。重新分发 DLL、导入库、头文件或示例时必须同时保留该目录；上游材料仍适用其原许可证。
+CryptoKit SoftHSM 原创代码与修改采用 GNU AGPL v3.0 only（`AGPL-3.0-only`），对应源码位于 <https://github.com/sawanolin/cryptokit-soft-hsm>。重新分发 SDK 时必须同时保留 `licenses/` 目录；SDFX、openHiTLS 等上游材料仍适用其原许可证。

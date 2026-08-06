@@ -38,7 +38,7 @@ int crypto_generate_random(uint32_t length, BYTE *output)
         return SDR_INARGERR;
     }
     
-    LOG_DEBUG("Generating %u bytes of random data using openHiTLS", length);
+    
     
     /* Ensure crypto engine is initialized */
     if (crypto_engine_check() != 0) {
@@ -53,6 +53,6 @@ int crypto_generate_random(uint32_t length, BYTE *output)
         return SDR_RANDERR;
     }
     
-    LOG_DEBUG("Generated %u bytes of random data successfully using openHiTLS DRBG", length);
+    
     return SDR_OK;
 }

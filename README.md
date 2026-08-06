@@ -28,7 +28,7 @@ Web 管理端，以及通过 TCP 调用服务端的 Windows x64 SDF C SDK。
 - Web 四角色权限管理、设备信息、SM2/RSA/对称密钥生命周期、会话管理和审计；
 - Web 随机数、SM3、SM4、SM2、RSA 在线密码自检；
 - 经过格式校验的备份、恢复、上传、下载和完全重置；
-- Windows x64 `sdfapi_x64.dll`、COFF 导入库、头文件和 C 示例。
+- 最小化 Windows x64 SDK：单一运行时 DLL、MSVC/MinGW 导入库、公开头文件和单一配置模板。
 
 除 SM9 外的公开 GM/T 0018 接口均已实现；SM9 明确返回 `SDR_NOTSUPPORT`。完整状态和验证边界见
 [GM/T 0018-2023 API 实现矩阵](api-matrix.md)。
@@ -130,29 +130,29 @@ docker compose down -v
 
 ## Windows x64 SDF SDK
 
-预构建 SDK 位于 `dist/sdfapi-windows-x64`，也建议作为 GitHub Release
-资产发布。主要文件：
+预构建 SDK 位于 `dist/sdfapi-windows-x64`，也建议作为 GitHub Release 资产发布。交付包已最小化：
 
 ```text
 bin/sdfapi_x64.dll
-bin/libwinpthread-1.dll
 lib/sdfapi_x64.lib
+lib/sdfapi_x64.dll.a
 include/sdf.h
+include/sdf_types.h
+include/sdf_err.h
 config/sdfapi.ini
-examples/
+licenses/
 SHA256SUMS
 ```
 
 使用步骤：
 
 1. 启动 Docker 服务；
-2. 将 `config/sdfapi.ini` 复制到应用工作目录；
-3. 将 `sdfapi_x64.dll` 和 `libwinpthread-1.dll` 放在程序旁；
-4. 包含 `include/sdf.h` 并链接 `lib/sdfapi_x64.lib`；
+2. 将 `config/sdfapi.ini` 复制到应用工作目录并按实际服务器地址修改；
+3. 将唯一的运行库 `sdfapi_x64.dll` 放在程序旁；
+4. 包含公开头文件，MSVC 链接 `sdfapi_x64.lib`，MinGW 链接 `sdfapi_x64.dll.a`；
 5. 使用标准 `SDF_OpenDevice`、`SDF_OpenSession` 等函数。
 
-包内 `bin/basic_test.exe` 已完成 Windows 到 Docker 的真实连接测试。
-`verify_exports.ps1` 可使用 `dumpbin` 或 `objdump` 检查公开导出函数。
+线程运行库已经静态链接，不再需要 `libwinpthread-1.dll`。测试 EXE、OBJ、示例源码、构建元数据和重复 INI 不进入 SDK ZIP；仓库中的 `tests/` 用于发布前验证。运行 `scripts/build_windows_sdk.ps1` 可从源码重建并检查公开导出和 DLL 运行依赖，运行 `scripts/package_windows_sdk.ps1` 可按固定白名单生成最小化 ZIP。
 
 ## 已实现接口概览
 
@@ -267,6 +267,7 @@ python tests/rbac_integrity_e2e.py --base-url http://127.0.0.1:28080
 
 ## 文档
 
+- [项目验收文档（含用户手册与初步设计）](项目验收文档.md)
 - [GM/T 0018-2023 API 实现矩阵](api-matrix.md)
 - [Web 管理端说明](WEB-MANAGEMENT.md)
 - [Windows x64 SDK 说明](dist/sdfapi-windows-x64/README.md)

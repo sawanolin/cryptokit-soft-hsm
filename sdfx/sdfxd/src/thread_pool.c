@@ -87,7 +87,7 @@ static void* worker_thread(void *arg)
         free(task);
     }
     
-    LOG_DEBUG("Worker thread %lu exiting", pthread_self());
+    
     return NULL;
 }
 
@@ -255,7 +255,7 @@ int thread_pool_submit(void (*function)(void*), void *arg)
         return -1;
     }
     
-    LOG_DEBUG("Task submitted to thread pool");
+    
     return 0;
 }
 

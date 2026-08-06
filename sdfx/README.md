@@ -97,6 +97,8 @@ Important current sources:
 - CMake 3.16 or newer;
 - a C11 compiler;
 - Ninja or Make;
+- SQLite3 development headers and library (required for the daemon, which
+  writes external SDF call records into the web management audit database);
 - an installed openHiTLS tree containing headers and libraries.
 
 Configure the same TCP profile used by the container:

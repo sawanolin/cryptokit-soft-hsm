@@ -236,7 +236,7 @@ ssize_t transport_recv(const transport_client_t *client, void *buffer, size_t le
     if (ret < 0) {
         UNIX_LOG_ERROR("recv failed: %s", strerror(errno));
     } else if (ret == 0) {
-        UNIX_LOG_DEBUG("connection closed");
+
     }
     
     return ret;
@@ -280,7 +280,7 @@ int transport_recv_message(const transport_client_t *client, void *buffer,
                   sizeof(sdfx_message_header_t) - header_received, 0);
         if (ret <= 0) {
             if (ret == 0) {
-                UNIX_LOG_DEBUG("connection closed during header receive");
+
             } else {
                 UNIX_LOG_ERROR("failed to receive header: %s", strerror(errno));
             }
@@ -325,7 +325,7 @@ int transport_recv_message(const transport_client_t *client, void *buffer,
                       total_message_size - total_received, 0);
             if (ret <= 0) {
                 if (ret == 0) {
-                    UNIX_LOG_DEBUG("connection closed during data receive");
+
                 } else {
                     UNIX_LOG_ERROR("failed to receive data: %s", strerror(errno));
                 }
@@ -336,7 +336,7 @@ int transport_recv_message(const transport_client_t *client, void *buffer,
     }
     
     *received_size = total_received;
-    UNIX_LOG_DEBUG("securely received complete message: %zu bytes", total_received);
+
     
     return 0;
 }
@@ -346,8 +346,7 @@ void transport_close_client(transport_client_t *client)
     if (client == NULL || client->fd < 0) {
         return;
     }
-    
-    UNIX_LOG_DEBUG("closing client connection: %s", client->client_info);
+
     close(client->fd);
     client->fd = -1;
 }
@@ -355,7 +354,7 @@ void transport_close_client(transport_client_t *client)
 void transport_close(void)
 {
     if (g_client_fd >= 0) {
-        UNIX_LOG_DEBUG("closing client connection");
+
         close(g_client_fd);
         g_client_fd = -1;
     }

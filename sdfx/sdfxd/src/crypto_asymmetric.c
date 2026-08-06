@@ -48,7 +48,7 @@ static int ensure_hitls_init(void) {
     if (!contexts_initialized) {
         memset(g_sm2_contexts, 0, sizeof(g_sm2_contexts));
         contexts_initialized = 1;
-        LOG_DEBUG("SM2 context manager initialized (thread-safe)");
+        
     }
     pthread_mutex_unlock(&init_mutex);
     
@@ -65,7 +65,7 @@ static uint32_t store_sm2_context(CRYPT_EAL_PkeyCtx *ctx) {
             g_sm2_contexts[i].ctx = ctx;
             g_sm2_contexts[i].in_use = 1;
             key_id = g_sm2_contexts[i].key_id;
-            LOG_DEBUG("Stored SM2 context: key_id=%u, slot=%d", key_id, i);
+            
             break;
         }
     }
@@ -86,7 +86,7 @@ static CRYPT_EAL_PkeyCtx* get_sm2_context(uint32_t key_id) {
     for (int i = 0; i < MAX_SM2_CONTEXTS; i++) {
         if (g_sm2_contexts[i].in_use && g_sm2_contexts[i].key_id == key_id) {
             ctx = g_sm2_contexts[i].ctx;
-            LOG_DEBUG("Found SM2 context: key_id=%u, slot=%d", key_id, i);
+            
             break;
         }
     }
@@ -107,7 +107,7 @@ static void free_sm2_context(uint32_t key_id) {
         if (g_sm2_contexts[i].in_use && g_sm2_contexts[i].key_id == key_id) {
             if (g_sm2_contexts[i].ctx != NULL) {
                 CRYPT_EAL_PkeyFreeCtx(g_sm2_contexts[i].ctx);
-                LOG_DEBUG("Freed SM2 context: key_id=%u, slot=%d", key_id, i);
+                
             }
             g_sm2_contexts[i].ctx = NULL;
             g_sm2_contexts[i].key_id = 0;

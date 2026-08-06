@@ -179,15 +179,15 @@ docker rm cryptokit-soft-hsm
 
 ## Windows x64 SDK
 
-Windows 客户端通过 `sdfapi_x64.dll` 调用 18081 TCP 服务。SDK 包含：
+Windows 客户端通过 `sdfapi_x64.dll` 调用 18081 TCP 服务。GitHub Release 提供最小化 SDK 包，包含：
 
-- `sdfapi_x64.dll`；
-- `sdfapi_x64.lib`；
-- `sdf.h` 等公开头文件；
-- `sdfapi.ini`；
-- C 示例和校验和。
+- 唯一的运行时 DLL `sdfapi_x64.dll`；
+- 分别供 MSVC 和 MinGW 使用的导入库；
+- `sdf.h`、`sdf_types.h`、`sdf_err.h` 三个公开头文件；
+- 唯一的 `sdfapi.ini` 配置模板；
+- SHA-256 校验和及必须保留的许可证文件。
 
-请从对应版本的 GitHub Release 下载：
+线程运行库已静态链接。测试程序、OBJ、示例源码、构建元数据和重复配置不进入 SDK ZIP。请从对应版本的 GitHub Release 下载：
 
 ```text
 https://github.com/sawanolin/cryptokit-soft-hsm/releases

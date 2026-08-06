@@ -2,6 +2,7 @@
 
 add_executable(sdfxd
     src/main.c
+    src/audit_db.c
     src/daemon_core.c
     src/thread_pool.c
     src/protocol_handler.c
@@ -27,11 +28,14 @@ target_include_directories(sdfxd PRIVATE
     ${OPENHITLS_ROOT}/include/hitls/bsl
 )
 
+find_package(SQLite3 REQUIRED)
+
 target_link_libraries(sdfxd
     sdfx_transport
     sdfx_protocol
     sdfx_config
     sdfx_hitls_init
+    SQLite::SQLite3
     ${COMMON_LIBS}
 )
 
