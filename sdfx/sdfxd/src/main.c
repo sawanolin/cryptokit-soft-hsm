@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
         {0, 0, 0, 0}
     };
     
-    printf("SDFX Daemon v1.0.0\n");
+    printf("SDFX Daemon v1.1.2\n");
     
     /* Parse command line arguments */
     while ((opt = getopt_long(argc, argv, "c:hvd", long_options, NULL)) != -1) {
@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
                 print_usage(argv[0]);
                 return 0;
             case 'v':
-                printf("SDFX Daemon version 1.0.0\n");
+                printf("SDFX Daemon version 1.1.2\n");
                 printf("Built with openHiTLS cryptographic library\n");
                 return 0;
             case 'd':

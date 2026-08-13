@@ -20,7 +20,7 @@ CryptoKit SoftHSM 是一套基于 SDFX 和 openHiTLS 的软件密码设备模拟
 镜像仓库为 `sawanolin/cryptokit-soft-hsm`：
 
 ```bash
-docker pull sawanolin/cryptokit-soft-hsm:1.0.0
+docker pull sawanolin/cryptokit-soft-hsm:1.1.2
 
 docker run -d \
   --name cryptokit-soft-hsm \
@@ -29,7 +29,7 @@ docker run -d \
   -v cryptokit-sdfx-data:/var/lib/sdfx \
   --restart unless-stopped \
   --security-opt no-new-privileges:true \
-  sawanolin/cryptokit-soft-hsm:1.0.0
+  sawanolin/cryptokit-soft-hsm:1.1.2
 ```
 
 打开：
@@ -45,7 +45,7 @@ http://ip:18080
 ```yaml
 services:
   softhsm:
-    image: sawanolin/cryptokit-soft-hsm:1.0.0
+    image: sawanolin/cryptokit-soft-hsm:1.1.2
     ports:
       - "0.0.0.0:18081:18081"
       - "0.0.0.0:18080:18080"
@@ -72,7 +72,7 @@ docker compose ps
 
 | 标签     | 含义                           |
 | -------- | ------------------------------ |
-| `1.0.0`  | 固定版本，部署时推荐           |
+| `1.1.2`  | 固定版本，部署时推荐           |
 | `latest` | 最新稳定版本，可能随新版本移动 |
 
 当前已经实际构建和验证的平台为：
@@ -107,7 +107,9 @@ linux/amd64
 - 附录 C IKE、IPSEC、SSL 普通和 EPK 包装接口；
 - SDF 用户文件；
 - Web 四角色权限、设备、SM2/RSA/对称密钥、会话和审计管理；
+- Web 服务管理展示地址、端口、启动时间、运行时长和请求数，系统管理员可真正启停或重启容器内 `sdfxd`；
 - Web 随机数、SM3、SM4、SM2、RSA 在线自检；
+- 审计日志支持时间段、级别、类型、结果、管理员、操作、来源、请求号、路径和关键字组合筛选，可按字段导出 TXT、CSV 或 JSONL；SDF 调用失败记录为 `ERROR / sdf`；
 - 备份、恢复、上传、下载和完全重置。
 
 当前仅 SM9 接口未实现并明确返回 `SDR_NOTSUPPORT`。附录 C VPN 派生尚未
@@ -116,7 +118,7 @@ linux/amd64
 ## Web 角色和密钥保护
 
 - 超级管理员：首次初始化与管理员管理；
-- 系统管理员：设备、会话和备份恢复；
+- 系统管理员：设备、会话、服务进程和备份恢复；启停密码服务不会停止 Web 或删除数据卷；
 - 安全管理员：密码自检及 SM2/RSA/对称密钥；
 - 审计管理员：日志配置、查询和 TXT 导出。
 
@@ -124,7 +126,10 @@ SM2/RSA 签名与加密密钥索引独立，可以在 Web 中修改。私钥访�
 
 ## 健康检查与日志
 
-镜像健康检查同时验证 18081 TCP 服务和 Web `/api/health`：
+镜像健康检查验证 Web `/api/health`。该接口同时报告 Supervisor 管理的
+`sdfxd` 实际状态；系统管理员主动停止密码服务时，Web 与容器仍保持
+`healthy`，页面会明确显示“密码服务已停止”。这使管理员能继续从 Web
+重新启动服务：
 
 ```bash
 docker inspect \
@@ -169,7 +174,7 @@ docker volume rm cryptokit-sdfx-data
 建议固定版本标签，并在更新前备份：
 
 ```bash
-docker pull sawanolin/cryptokit-soft-hsm:1.0.0
+docker pull sawanolin/cryptokit-soft-hsm:1.1.2
 docker stop cryptokit-soft-hsm
 docker rm cryptokit-soft-hsm
 ```

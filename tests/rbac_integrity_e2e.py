@@ -60,6 +60,7 @@ def main():
     security = Client(args.base_url)
     login = security.login("secadmin", "Security!Admin2026")
     assert login["pages"] == ["keys", "testing"]
+    security.call("/api/service", expected=403)
     security.call("/api/keys", "POST", {"type": "sign", "index": 1, "password": ""}, expected=201)
     security.call("/api/keys", "POST", {"type": "enc", "index": 2, "password": ""}, expected=201)
     keys = security.call("/api/keys")
@@ -90,8 +91,20 @@ def main():
 
     system = Client(args.base_url)
     login = system.login("sysadmin", "System!Admin2026")
-    assert "sessions" in login["pages"] and "keys" not in login["pages"]
+    assert "sessions" in login["pages"] and "service" in login["pages"] and "keys" not in login["pages"]
     assert system.call("/api/status")["daemon"]["status"] == "running"
+    service = system.call("/api/service")
+    assert service["running"] is True and service["port"] == 18081
+    system.call("/api/service/restart", "POST", {"confirmation": "RESTART SERVICE"})
+    assert system.call("/api/service")["daemon_available"] is True
+    system.call("/api/service/stop", "POST", {"confirmation": "STOP SERVICE"})
+    assert system.call("/api/service")["running"] is False
+    system.call("/api/status", expected=503)
+    health = system.call("/api/health")
+    assert health["status"] == "ok" and health["version"] == "1.1.2"
+    assert health["daemon"]["running"] is False
+    system.call("/api/service/start", "POST", {"confirmation": "START SERVICE"})
+    assert system.call("/api/service")["daemon_available"] is True
     backup = system.call("/api/backups", "POST", {}, expected=201)
     assert len(backup["id"]) == 32
     system.call("/api/keys", expected=403)
@@ -106,8 +119,18 @@ def main():
     assert updated == {"retention_days": 730, "display_level": "DEBUG"}
     events = audit.call("/api/audit?limit=200")
     assert len(events) >= 10 and all("request_id" in event for event in events)
+    errors = audit.call("/api/audit?levels=ERROR&categories=sdf")
+    assert any(event["action"] == "sdf_call_failed" for event in errors)
+    options = audit.call("/api/audit/options")
+    assert "sdf" in options["category"] and {"txt", "csv", "jsonl"} <= set(options["formats"])
+    text = audit.call("/api/audit/export?format=txt&categories=sdf&levels=ERROR", raw=True)
+    assert "sdf_call_failed" in text
+    csv_text = audit.call("/api/audit/export?format=csv&fields=occurred_at,level,category,action&categories=sdf", raw=True)
+    assert "occurred_at,level,category,action" in csv_text
+    jsonl = audit.call("/api/audit/export?format=jsonl&fields=level,category,action&categories=sdf", raw=True)
+    assert '"category": "sdf"' in jsonl
     text = audit.call("/api/audit/export", raw=True)
-    assert "administrator_create" in text and "integrity_verify" in text and "request:" in text
+    assert "administrator_create" in text and "integrity_verify" in text and "request_id=" in text
     audit.call("/api/keys", expected=403)
     print(json.dumps({"result":"passed","roles":4,"keys":["sm2-sign:1","sm2-enc:7","rsa-sign:8","rsa-enc:4"],"integrity":"HMAC-SM3","audit_export":"txt"}, ensure_ascii=False))
 

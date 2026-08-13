@@ -100,10 +100,11 @@ function switchPage(page) {
   state.page = page;
   $$(".page").forEach((item) => { item.hidden = item.id !== `page-${page}`; });
   $$("#nav button").forEach((item) => item.classList.toggle("active", item.dataset.page === page));
-  const titles = { administrators: "管理员管理", dashboard: "运行概览", keys: "密码服务与密钥", device: "设备信息", sessions: "会话管理", testing: "密码自检", maintenance: "备份与恢复", audit: "审计日志" };
+  const titles = { administrators: "管理员管理", dashboard: "运行概览", service: "服务管理", keys: "密码服务与密钥", device: "设备信息", sessions: "会话管理", testing: "密码自检", maintenance: "备份与恢复", audit: "审计日志" };
   $("#page-title").textContent = titles[page];
   if (page === "administrators") loadAdministrators();
   if (page === "dashboard") loadDashboard();
+  if (page === "service") loadService();
   if (page === "keys") {
     loadKeys();
     if (typeof loadKeks === "function") loadKeks();
@@ -134,13 +135,101 @@ function actionButton(label, className, handler) {
   return button;
 }
 
+function formatDateTime(timestamp) {
+  return timestamp ? new Date(timestamp * 1000).toLocaleString() : "—";
+}
+
+function formatDuration(seconds) {
+  let remaining = Math.max(0, Number(seconds) || 0);
+  const days = Math.floor(remaining / 86400);
+  remaining %= 86400;
+  const hours = Math.floor(remaining / 3600);
+  remaining %= 3600;
+  const minutes = Math.floor(remaining / 60);
+  const parts = [];
+  if (days) parts.push(`${days} 天`);
+  if (hours || days) parts.push(`${hours} 小时`);
+  parts.push(`${minutes} 分钟`);
+  return parts.join(" ");
+}
+
+async function loadService() {
+  const service = await api("/api/service");
+  const running = service.running && service.daemon_available;
+  const stateText = service.running ? (service.daemon_available ? "运行中" : "进程异常") : "已停止";
+  $("#service-state").textContent = stateText;
+  $("#service-address").textContent = service.address;
+  $("#service-uptime").textContent = service.running ? formatDuration(service.uptime_seconds) : "—";
+  $("#service-requests").textContent = service.total_requests ?? "—";
+  $("#service-host").textContent = service.listen_host;
+  $("#service-port").textContent = service.port;
+  $("#service-started-at").textContent = formatDateTime(service.started_at);
+  $("#service-stopped-at").textContent = formatDateTime(service.stopped_at);
+  $("#service-pid").textContent = service.pid ?? "—";
+  $("#service-sessions").textContent = service.active_sessions ?? "—";
+  $("#service-keys").textContent = service.keys ?? "—";
+  $("#service-description").textContent = service.description || service.supervisor_state;
+  const badge = $("#service-state-badge");
+  badge.textContent = stateText;
+  badge.className = `status ${running ? "ok" : service.running ? "warn" : "off"}`;
+  const error = service.daemon_error || service.spawn_error;
+  $("#service-error").hidden = !error;
+  $("#service-error").textContent = error ? `服务诊断：${error}` : "";
+  $("#start-service").disabled = service.running;
+  $("#stop-service").disabled = !service.running;
+  setService(running, running ? "密码服务运行正常" : service.running ? "密码服务进程异常" : "密码服务已停止（Web 正常）");
+}
+
+function openServiceDialog(action) {
+  const settings = {
+    start: { title: "启动密码服务", confirmation: "START SERVICE", copy: "启动同一容器内的 sdfxd 密码服务进程。" },
+    stop: { title: "停止密码服务", confirmation: "STOP SERVICE", copy: "停止会断开全部 SDF 连接与活动会话。Web 管理端会保持在线，可稍后重新启动服务。" },
+    restart: { title: "重启密码服务", confirmation: "RESTART SERVICE", copy: "重启会中断全部 SDF 连接与活动会话，并重置本次启动的请求计数。持久化数据不受影响。" },
+  };
+  const config = settings[action];
+  const form = $("#service-form");
+  form.reset();
+  form.elements.action.value = action;
+  form.elements.confirmation.placeholder = config.confirmation;
+  form.elements.confirmation.pattern = config.confirmation;
+  $("#service-dialog-title").textContent = config.title;
+  $("#service-dialog-copy").textContent = `${config.copy} 请输入 ${config.confirmation} 确认。`;
+  $("#service-submit").textContent = config.title;
+  $("#service-submit").className = `button ${action === "start" ? "primary" : action === "restart" ? "warning" : "danger"}`;
+  $("#service-dialog").showModal();
+}
+
+function lifecycleBadge(item) {
+  const badge = document.createElement("span");
+  const status = item.expiry_status || "permanent";
+  badge.className = `status ${status === "expired" ? "expired" : status === "warning" ? "warn" : status === "valid" ? "ok" : "off"}`;
+  badge.textContent = status === "permanent" ? "长期有效" :
+    status === "expired" ? `已到期 ${Math.abs(item.remaining_days || 0)} 天` :
+    status === "warning" ? `剩余 ${item.remaining_days} 天` :
+    `${formatDateTime(item.expires_at)}（${item.remaining_days} 天）`;
+  return badge;
+}
+
+function openValidityDialog(item, keyType = item.type) {
+  const form = $("#validity-form");
+  form.algorithm.value = item.algorithm || "SM4";
+  form.key_type.value = keyType;
+  form.index.value = item.index;
+  form.validity_days.value = item.validity_days ?? 0;
+  $("#validity-dialog").showModal();
+}
+
 async function loadKeys() {
   const rows = $("#key-rows");
-  rows.innerHTML = '<tr><td colspan="7">正在读取…</td></tr>';
+  rows.innerHTML = '<tr><td colspan="9">正在读取…</td></tr>';
   try {
     const keys = await api("/api/keys");
     rows.innerHTML = "";
-    if (!keys.length) rows.innerHTML = '<tr><td colspan="7">尚未生成内部密钥</td></tr>';
+    if (!keys.length) rows.innerHTML = '<tr><td colspan="9">尚未生成内部密钥</td></tr>';
+    const expiring = keys.filter((key) => ["warning", "expired"].includes(key.expiry_status));
+    const summary = $("#key-expiry-summary");
+    summary.hidden = expiring.length === 0;
+    summary.textContent = expiring.length ? `密钥到期告警：${expiring.filter((key) => key.expiry_status === "expired").length} 个已到期，${expiring.filter((key) => key.expiry_status === "warning").length} 个将在 30 天内到期。到期不会自动停用。` : "";
     for (const key of keys) {
       const tr = document.createElement("tr");
       const purpose = key.type === "sign" ? "签名" : key.type === "enc" ? "加密" : key.purpose;
@@ -158,6 +247,9 @@ async function loadKeys() {
       integrityBadge.className = `status ${key.integrity === false ? "off" : "ok"}`;
       integrityBadge.textContent = key.integrity === false ? "异常" : "已保护";
       integrityCell.append(integrityBadge); tr.append(integrityCell);
+      const created = document.createElement("td");
+      created.textContent = formatDateTime(key.lifecycle_created_at || key.created_at); tr.append(created);
+      const validity = document.createElement("td"); validity.append(lifecycleBadge(key)); tr.append(validity);
       const fingerprint = document.createElement("td");
       fingerprint.className = "fingerprint"; fingerprint.title = key.fingerprint;
       fingerprint.textContent = key.fingerprint; tr.append(fingerprint);
@@ -174,6 +266,7 @@ async function loadKeys() {
         form.old_index.value = key.index; form.new_index.value = key.index;
         $("#reindex-dialog").showModal();
       }));
+      actions.append(actionButton("有效期", "", () => openValidityDialog(key)));
       actions.append(actionButton(key.enabled ? "停用" : "启用", "", async () => {
         try { await api(`/api/keys/${key.type}/${key.index}/${key.enabled ? "disable" : "enable"}${algorithmQuery}`, { method: "POST", body: "{}" }); await loadKeys(); }
         catch (error) { notice(error.message, true); }
@@ -208,21 +301,25 @@ async function loadDevice() {
 
 async function loadAudit() {
   try {
-    const [events, settings] = await Promise.all([
-      api("/api/audit?limit=200"), api("/api/audit/settings"),
+    const filterParams = auditFilterParams();
+    const [events, settings, options] = await Promise.all([
+      api(`/api/audit?${filterParams}`), api("/api/audit/settings"), api("/api/audit/options"),
     ]);
     const settingsForm = $("#audit-settings-form");
     settingsForm.retention_days.value = settings.retention_days;
     settingsForm.display_level.value = settings.display_level;
+    populateAuditSelect("categories", options.category || []);
+    populateAuditSelect("results", options.result || []);
     const rows = $("#audit-rows");
     rows.innerHTML = "";
-    if (!events.length) rows.innerHTML = '<tr><td colspan="9">当前级别下暂无审计事件</td></tr>';
+    if (!events.length) rows.innerHTML = '<tr><td colspan="12">当前筛选条件下暂无审计事件</td></tr>';
     for (const event of events) {
       const tr = document.createElement("tr");
       [
         new Date(event.occurred_at * 1000).toLocaleString(),
         event.level, event.category, event.username, event.action, event.target,
-        event.result, event.remote_addr, event.details || "—",
+        event.result, event.remote_addr, event.request_id || "—", event.method || "—",
+        event.path || "—", event.details || "—",
       ].forEach((value) => {
         const td = document.createElement("td");
         td.textContent = value;
@@ -231,6 +328,37 @@ async function loadAudit() {
       rows.append(tr);
     }
   } catch (error) { notice(error.message, true); }
+}
+
+function populateAuditSelect(name, values) {
+  const select = $(`#audit-filter-form [name="${name}"]`);
+  const selected = new Set([...select.selectedOptions].map((option) => option.value));
+  select.innerHTML = "";
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    option.selected = selected.has(value);
+    select.append(option);
+  }
+}
+
+function auditFilterParams() {
+  const form = $("#audit-filter-form");
+  const params = new URLSearchParams();
+  for (const name of ["levels", "categories", "results"]) {
+    const values = [...form.elements[name].selectedOptions].map((option) => option.value);
+    if (values.length) params.set(name, values.join(","));
+  }
+  for (const name of ["username", "action", "target", "remote_addr", "request_id", "method", "path", "keyword", "limit", "order"]) {
+    const value = form.elements[name].value.trim();
+    if (value) params.set(name, value);
+  }
+  for (const name of ["start_at", "end_at"]) {
+    const value = form.elements[name].value;
+    if (value) params.set(name, String(Math.floor(new Date(value).getTime() / 1000)));
+  }
+  return params;
 }
 
 $("#initialize-form").addEventListener("submit", async (event) => {
@@ -297,12 +425,30 @@ $("#key-form").addEventListener("submit", async (event) => {
   const data = formJson(form);
   data.index = Number(data.index);
   data.bits = Number(data.bits);
+  data.validity_days = Number(data.validity_days);
   try {
     await api("/api/keys", { method: "POST", body: JSON.stringify(data) });
     $("#key-dialog").close();
     form.reset();
     notice("内部密钥已生成");
     await loadKeys();
+  } catch (error) { notice(error.message, true); }
+});
+
+$("#validity-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formJson(form);
+  const body = JSON.stringify({ validity_days: Number(data.validity_days) });
+  const path = data.key_type === "kek"
+    ? `/api/keks/${data.index}/validity`
+    : `/api/keys/${data.key_type}/${data.index}/validity?algorithm=${encodeURIComponent(data.algorithm)}`;
+  try {
+    await api(path, { method: "PUT", body });
+    $("#validity-dialog").close();
+    notice("密钥有效期已更新");
+    if (data.key_type === "kek" && typeof loadKeks === "function") await loadKeks();
+    else await loadKeys();
   } catch (error) { notice(error.message, true); }
 });
 
@@ -425,14 +571,58 @@ $("#audit-settings-form").addEventListener("submit", async (event) => {
   } catch (error) { notice(error.message, true); }
 });
 $("#refresh-audit").addEventListener("click", loadAudit);
-$("#export-audit").addEventListener("click", () => window.location.assign("/api/audit/export"));
+$("#audit-filter-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); await loadAudit();
+});
+$("#audit-filter-form").addEventListener("reset", () => setTimeout(loadAudit, 0));
+$("#audit-export-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const params = auditFilterParams();
+  params.set("format", form.elements.format.value);
+  params.set("limit", form.elements.limit.value);
+  params.set("order", form.elements.order.value);
+  params.set("include_header", form.elements.include_header.checked ? "true" : "false");
+  const fields = [...form.querySelectorAll('input[name="fields"]:checked')].map((item) => item.value);
+  if (!fields.length) { notice("请至少选择一个导出字段", true); return; }
+  params.set("fields", fields.join(","));
+  window.location.assign(`/api/audit/export?${params}`);
+});
+$("#refresh-service").addEventListener("click", async () => {
+  try { await loadService(); } catch (error) { notice(error.message, true); }
+});
+$("#start-service").addEventListener("click", () => openServiceDialog("start"));
+$("#stop-service").addEventListener("click", () => openServiceDialog("stop"));
+$("#restart-service").addEventListener("click", () => openServiceDialog("restart"));
+$("#service-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formJson(form);
+  const submit = $("#service-submit");
+  submit.disabled = true;
+  try {
+    await api(`/api/service/${data.action}`, {
+      method: "POST",
+      body: JSON.stringify({ confirmation: data.confirmation }),
+    });
+    $("#service-dialog").close();
+    form.reset();
+    notice(data.action === "start" ? "密码服务已启动" : data.action === "stop" ? "密码服务已停止，Web 管理端仍保持在线" : "密码服务已重启");
+    await loadService();
+  } catch (error) {
+    notice(error.message, true);
+  } finally {
+    submit.disabled = false;
+  }
+});
 $$("#nav button").forEach((button) => button.addEventListener("click", () => switchPage(button.dataset.page)));
 
 (async function bootstrap() {
   try {
     const health = await api("/api/health");
     state.initialized = health.initialized;
-    setService(true, "密码服务运行正常");
+    const daemonRunning = health.daemon?.running && health.daemon?.daemon_available;
+    setService(daemonRunning, daemonRunning ? "密码服务运行正常" : "密码服务已停止（Web 正常）");
     if (!health.initialized) {
       showMode("initialize");
       return;

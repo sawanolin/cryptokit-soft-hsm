@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import base64
+import csv
 import hashlib
 import hmac
+import http.client
+import io
 import json
+import math
 import os
 import re
 import secrets
@@ -12,6 +16,7 @@ import sqlite3
 import struct
 import threading
 import time
+import xmlrpc.client
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -22,13 +27,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 
-PRODUCT_NAME = "CryptoKit SoftHSM Manager"
+PRODUCT_NAME = "CryptoKit 软件服务器密码机管理平台"
+PRODUCT_VERSION = "1.1.2"
 DATA_ROOT = Path(os.getenv("SDFX_DATA_DIR", "/var/lib/sdfx")).resolve()
 WEB_ROOT = DATA_ROOT / "web"
 STATE_FILE = WEB_ROOT / "state.json"
 DATABASE_FILE = WEB_ROOT / "manager.db"
 BACKUP_ROOT = DATA_ROOT / "backups"
 TOKEN_FILE = Path(os.getenv("SDFX_ADMIN_TOKEN_FILE", "/run/sdfx/admin.token"))
+SUPERVISOR_SOCKET = Path(os.getenv("SDFX_SUPERVISOR_SOCKET", "/run/sdfx/supervisor.sock"))
+DAEMON_LISTEN_HOST = os.getenv("SDFX_DAEMON_LISTEN_HOST", "0.0.0.0")
 STATIC_ROOT = Path(__file__).resolve().parent.parent / "static"
 SESSION_TTL = int(os.getenv("SDFX_WEB_SESSION_TTL", "1800"))
 COOKIE_SECURE = os.getenv("SDFX_WEB_SECURE_COOKIE", "false").lower() == "true"
@@ -89,7 +97,7 @@ ROLE_LABELS = {
 }
 ROLE_PAGES = {
     "super_admin": ["administrators", "maintenance"],
-    "system_admin": ["dashboard", "device", "sessions", "maintenance"],
+    "system_admin": ["dashboard", "service", "device", "sessions", "maintenance"],
     "security_admin": ["keys", "testing"],
     "audit_admin": ["audit"],
 }
@@ -99,11 +107,15 @@ login_lock = threading.Lock()
 login_failures: dict[str, list[float]] = {}
 maintenance_lock = threading.Lock()
 maintenance_active = threading.Event()
+service_control_lock = threading.Lock()
 
 
 class DaemonError(RuntimeError):
-    def __init__(self, status: int, message: str = "密码服务调用失败") -> None:
+    def __init__(
+        self, status: int, message: str = "密码服务调用失败", command: int | None = None,
+    ) -> None:
         self.status = status
+        self.command = command
         super().__init__(f"{message}（SDF 状态 0x{status:08x}）")
 
 
@@ -141,7 +153,7 @@ class ProtocolClient:
                 raise ConnectionError("密码服务返回长度超限")
             payload = recv_exact(sock, length)
         if status != SDR_OK:
-            raise DaemonError(status)
+            raise DaemonError(status, command=command)
         return payload
 
     def admin(
@@ -226,6 +238,103 @@ class ProtocolClient:
 protocol = ProtocolClient()
 
 
+class SupervisorUnixConnection(http.client.HTTPConnection):
+    """HTTP connection transported over Supervisor's private Unix socket."""
+
+    def __init__(self, socket_path: Path) -> None:
+        # sdfxd may need Supervisor's full graceful-stop window before replying.
+        super().__init__("localhost", timeout=15)
+        self.socket_path = socket_path
+
+    def connect(self) -> None:
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        connection.settimeout(self.timeout)
+        connection.connect(str(self.socket_path))
+        self.sock = connection
+
+
+class SupervisorUnixTransport(xmlrpc.client.Transport):
+    def __init__(self, socket_path: Path) -> None:
+        super().__init__()
+        self.socket_path = socket_path
+
+    def make_connection(self, host: str) -> SupervisorUnixConnection:
+        return SupervisorUnixConnection(self.socket_path)
+
+
+class ServiceSupervisor:
+    process_name = "sdfxd"
+
+    def _call(self, method: str, *args: Any) -> Any:
+        transport = SupervisorUnixTransport(SUPERVISOR_SOCKET)
+        proxy = xmlrpc.client.ServerProxy(
+            "http://localhost/RPC2",
+            transport=transport,
+            allow_none=True,
+        )
+        try:
+            return getattr(proxy.supervisor, method)(*args)
+        except xmlrpc.client.Fault as error:
+            conflict_codes = {60, 70}
+            status_code = 409 if error.faultCode in conflict_codes else 503
+            raise HTTPException(
+                status_code,
+                f"密码服务进程控制失败：{error.faultString}",
+            ) from error
+        except (OSError, http.client.HTTPException, xmlrpc.client.ProtocolError) as error:
+            raise ConnectionError(f"无法连接容器进程管理器：{error}") from error
+        finally:
+            transport.close()
+
+    def info(self) -> dict[str, Any]:
+        return self._call("getProcessInfo", self.process_name)
+
+    def start(self) -> None:
+        self._call("startProcess", self.process_name, True)
+
+    def stop(self) -> None:
+        self._call("stopProcess", self.process_name, True)
+
+
+service_supervisor = ServiceSupervisor()
+
+
+def service_snapshot(include_daemon: bool = True) -> dict[str, Any]:
+    info = service_supervisor.info()
+    supervisor_state = str(info.get("statename", "UNKNOWN")).upper()
+    running = supervisor_state == "RUNNING"
+    daemon: dict[str, Any] | None = None
+    daemon_error: str | None = None
+    if running and include_daemon:
+        try:
+            daemon = protocol.status()
+        except (DaemonError, ConnectionError, OSError, json.JSONDecodeError) as error:
+            daemon_error = str(error)
+
+    started_at = int(info.get("start") or 0)
+    now = int(info.get("now") or time.time())
+    return {
+        "name": service_supervisor.process_name,
+        "display_name": "SDF 密码服务",
+        "supervisor_state": supervisor_state,
+        "running": running,
+        "daemon_available": daemon is not None,
+        "listen_host": DAEMON_LISTEN_HOST,
+        "port": protocol.port,
+        "address": f"{DAEMON_LISTEN_HOST}:{protocol.port}",
+        "started_at": started_at or None,
+        "stopped_at": int(info.get("stop") or 0) or None,
+        "uptime_seconds": max(0, now - started_at) if running and started_at else 0,
+        "pid": int(info.get("pid") or 0) or None,
+        "description": str(info.get("description") or ""),
+        "spawn_error": str(info.get("spawnerr") or ""),
+        "total_requests": daemon.get("total_requests") if daemon else None,
+        "active_sessions": daemon.get("active_sessions") if daemon else None,
+        "keys": daemon.get("keys") if daemon else None,
+        "daemon_error": daemon_error,
+    }
+
+
 def atomic_json_write(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + f".tmp.{os.getpid()}")
@@ -292,6 +401,109 @@ def db() -> sqlite3.Connection:
     return connection
 
 
+def lifecycle_id(algorithm: str, key_type: str, index: int) -> str:
+    normalized = "SM4" if key_type == "kek" else key_algorithm(algorithm)
+    return f"{normalized.lower()}:{key_type}:{index}"
+
+
+def validate_validity_days(validity_days: int) -> None:
+    if validity_days < 0 or validity_days > 36500:
+        raise HTTPException(422, "密钥有效期必须为 0–36500 天，0 表示长期有效")
+
+
+def save_key_lifecycle(
+    algorithm: str, key_type: str, index: int, validity_days: int,
+    *, created_at: int | None = None,
+) -> None:
+    validate_validity_days(validity_days)
+    now = int(time.time())
+    created = now if created_at is None else int(created_at)
+    expires = None if validity_days == 0 else created + validity_days * 86400
+    with db() as connection:
+        connection.execute(
+            """
+            INSERT INTO key_lifecycle(key_id, created_at, expires_at, validity_days, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(key_id) DO UPDATE SET
+                expires_at=excluded.expires_at,
+                validity_days=excluded.validity_days,
+                updated_at=excluded.updated_at
+            """,
+            (lifecycle_id(algorithm, key_type, index), created, expires, validity_days, now),
+        )
+
+
+def delete_key_lifecycle(algorithm: str, key_type: str, index: int) -> None:
+    with db() as connection:
+        connection.execute(
+            "DELETE FROM key_lifecycle WHERE key_id = ?",
+            (lifecycle_id(algorithm, key_type, index),),
+        )
+
+
+def reindex_key_lifecycle(algorithm: str, key_type: str, old_index: int, new_index: int) -> None:
+    with db() as connection:
+        connection.execute(
+            "UPDATE key_lifecycle SET key_id = ?, updated_at = ? WHERE key_id = ?",
+            (
+                lifecycle_id(algorithm, key_type, new_index), int(time.time()),
+                lifecycle_id(algorithm, key_type, old_index),
+            ),
+        )
+
+
+def attach_key_lifecycle(items: list[dict[str, Any]], key_type: str | None = None) -> list[dict[str, Any]]:
+    with db() as connection:
+        rows = {
+            row["key_id"]: dict(row)
+            for row in connection.execute("SELECT * FROM key_lifecycle").fetchall()
+        }
+    now = int(time.time())
+    for item in items:
+        item_type = key_type or str(item.get("type", ""))
+        algorithm = "SM4" if item_type == "kek" else str(item.get("algorithm", "SM2"))
+        key_id = lifecycle_id(algorithm, item_type, int(item["index"]))
+        lifecycle = rows.get(key_id)
+        created_at = int(item.get("created_at") or now)
+        if lifecycle is None:
+            save_key_lifecycle(algorithm, item_type, int(item["index"]), 0, created_at=created_at)
+            lifecycle = {
+                "created_at": created_at, "expires_at": None,
+                "validity_days": 0, "updated_at": created_at,
+            }
+        expires_at = lifecycle.get("expires_at")
+        remaining_days = None if expires_at is None else math.ceil((int(expires_at) - now) / 86400)
+        expiry_status = (
+            "permanent" if expires_at is None else
+            "expired" if remaining_days <= 0 else
+            "warning" if remaining_days <= 30 else "valid"
+        )
+        item.update({
+            "lifecycle_created_at": int(lifecycle["created_at"]),
+            "validity_days": int(lifecycle["validity_days"]),
+            "expires_at": None if expires_at is None else int(expires_at),
+            "remaining_days": remaining_days,
+            "expiry_status": expiry_status,
+        })
+    active_ids = {
+        lifecycle_id(
+            "SM4" if (key_type or str(item.get("type", ""))) == "kek"
+            else str(item.get("algorithm", "SM2")),
+            key_type or str(item.get("type", "")), int(item["index"]),
+        )
+        for item in items
+    }
+    known_prefixes = ("sm4:kek:",) if key_type == "kek" else ("sm2:sign:", "sm2:enc:", "rsa:sign:", "rsa:enc:")
+    stale_ids = [key_id for key_id in rows if key_id.startswith(known_prefixes) and key_id not in active_ids]
+    if stale_ids:
+        with db() as connection:
+            connection.executemany(
+                "DELETE FROM key_lifecycle WHERE key_id = ?",
+                ((key_id,) for key_id in stale_ids),
+            )
+    return items
+
+
 def initialize_storage() -> None:
     WEB_ROOT.mkdir(parents=True, exist_ok=True)
     os.chmod(WEB_ROOT, 0o700)
@@ -346,6 +558,17 @@ def initialize_storage() -> None:
             """
         )
         connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS key_lifecycle (
+                key_id TEXT PRIMARY KEY,
+                created_at INTEGER NOT NULL,
+                expires_at INTEGER,
+                validity_days INTEGER NOT NULL DEFAULT 0,
+                updated_at INTEGER NOT NULL
+            )
+            """
+        )
+        connection.execute(
             "INSERT OR IGNORE INTO manager_settings(key, value) VALUES (?, ?)",
             ("audit_retention_days", "365"),
         )
@@ -389,10 +612,12 @@ class KeyCreateRequest(BaseModel):
     algorithm: str = "SM2"
     bits: int | None = None
     password: str = ""
+    validity_days: int = 365
 
 
 class KekCreateRequest(BaseModel):
     index: int
+    validity_days: int = 365
 
 
 class KeyPasswordRequest(BaseModel):
@@ -402,6 +627,10 @@ class KeyPasswordRequest(BaseModel):
 
 class KeyReindexRequest(BaseModel):
     new_index: int
+
+
+class KeyValidityRequest(BaseModel):
+    validity_days: int = 365
 
 
 class UserCreateRequest(BaseModel):
@@ -436,6 +665,10 @@ class ResetRequest(BaseModel):
 class AuditSettingsUpdate(BaseModel):
     retention_days: int
     display_level: str
+
+
+class ServiceControlRequest(BaseModel):
+    confirmation: str
 
 
 def validate_metadata(vendor: str, device_name: str, serial: str) -> None:
@@ -490,6 +723,46 @@ def audit(
 
 
 AUDIT_LEVEL_ORDER = {"DEBUG": 10, "INFO": 20, "WARN": 30, "ERROR": 40}
+AUDIT_EXPORT_FORMATS = {"txt", "csv", "jsonl"}
+AUDIT_EXPORT_FIELDS = (
+    "occurred_at", "level", "category", "username", "action", "target",
+    "result", "remote_addr", "request_id", "method", "path", "details",
+    "user_agent",
+)
+
+
+def request_username(request: Request) -> str:
+    raw = request.cookies.get(COOKIE_NAME)
+    if not raw:
+        return "anonymous"
+    try:
+        with db() as connection:
+            row = connection.execute(
+                "SELECT username FROM sessions WHERE id_hash = ?", (session_hash(raw),)
+            ).fetchone()
+        return str(row["username"]) if row else "anonymous"
+    except (OSError, sqlite3.Error):
+        return "anonymous"
+
+
+def audit_sdf_failure(request: Request, error: Exception, code: str) -> None:
+    command = getattr(error, "command", None)
+    command_text = f"0x{command:04X}" if isinstance(command, int) else "unknown"
+    status = getattr(error, "status", None)
+    status_text = f"0x{status:08X}" if isinstance(status, int) else "unavailable"
+    try:
+        audit(
+            request,
+            request_username(request),
+            "sdf_call_failed",
+            f"command:{command_text}",
+            "failure",
+            level="ERROR",
+            category="sdf",
+            details=f"code={code};status={status_text};error={error}",
+        )
+    except (OSError, sqlite3.Error):
+        pass
 
 
 def read_audit_settings() -> dict[str, Any]:
@@ -641,6 +914,7 @@ async def request_context(request: Request, call_next):
         else:
             response = await call_next(request)
     except DaemonError as error:
+        audit_sdf_failure(request, error, "sdf_error")
         response = Response(
             json.dumps(
                 {"error": {"code": "sdf_error", "message": str(error)}, "request_id": request_id},
@@ -650,6 +924,7 @@ async def request_context(request: Request, call_next):
             media_type="application/json",
         )
     except (ConnectionError, OSError, json.JSONDecodeError) as error:
+        audit_sdf_failure(request, error, "daemon_unavailable")
         response = Response(
             json.dumps(
                 {"error": {"code": "daemon_unavailable", "message": str(error)}, "request_id": request_id},
@@ -672,12 +947,13 @@ async def request_context(request: Request, call_next):
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    status = protocol.status()
+    service = service_snapshot()
     return {
         "status": "ok",
         "product": PRODUCT_NAME,
+        "version": PRODUCT_VERSION,
         "initialized": load_state() is not None,
-        "daemon": status,
+        "daemon": service,
     }
 
 
@@ -776,6 +1052,70 @@ def status(session: dict[str, Any] = Depends(require_roles("system_admin"))) -> 
         "daemon": daemon,
         "session_expires_at": session["expires_at"],
     }
+
+
+@app.get("/api/service")
+def get_service(
+    _: dict[str, Any] = Depends(require_roles("system_admin")),
+) -> dict[str, Any]:
+    return service_snapshot()
+
+
+def control_service(
+    action: str,
+    payload: ServiceControlRequest,
+    request: Request,
+    session: dict[str, Any],
+) -> dict[str, Any]:
+    expected = {
+        "start": "START SERVICE",
+        "stop": "STOP SERVICE",
+        "restart": "RESTART SERVICE",
+    }
+    if action not in expected:
+        raise HTTPException(404, "服务操作不存在")
+    if not hmac.compare_digest(payload.confirmation, expected[action]):
+        raise HTTPException(403, f"确认文字不正确，应输入 {expected[action]}")
+
+    with service_control_lock:
+        before = service_snapshot(include_daemon=False)
+        try:
+            if action == "start":
+                if before["running"]:
+                    raise HTTPException(409, "密码服务已经在运行")
+                service_supervisor.start()
+            elif action == "stop":
+                if not before["running"]:
+                    raise HTTPException(409, "密码服务当前未运行")
+                service_supervisor.stop()
+            else:
+                if before["running"]:
+                    service_supervisor.stop()
+                service_supervisor.start()
+            after = service_snapshot(include_daemon=action != "stop")
+        except Exception as error:
+            audit(
+                request, session["username"], f"service_{action}", "sdfxd", "failure",
+                level="ERROR", category="service", details=str(error),
+            )
+            raise
+
+    audit(
+        request, session["username"], f"service_{action}", "sdfxd", "success",
+        category="service",
+        details=f"state={before['supervisor_state']}->{after['supervisor_state']}",
+    )
+    return after
+
+
+@app.post("/api/service/{action}")
+def update_service(
+    action: str,
+    payload: ServiceControlRequest,
+    request: Request,
+    session: dict[str, Any] = Depends(require_roles("system_admin", csrf=True)),
+) -> dict[str, Any]:
+    return control_service(action, payload, request, session)
 
 
 @app.get("/api/administrators")
@@ -911,12 +1251,12 @@ def update_device(
 
 @app.get("/api/keys")
 def list_keys(_: dict[str, Any] = Depends(require_roles("security_admin"))) -> list[dict[str, Any]]:
-    return protocol.keys()
+    return attach_key_lifecycle(protocol.keys())
 
 
 @app.get("/api/keks")
 def list_keks(_: dict[str, Any] = Depends(require_roles("security_admin"))) -> list[dict[str, Any]]:
-    return protocol.keks()
+    return attach_key_lifecycle(protocol.keks(), "kek")
 
 
 @app.post("/api/keks", status_code=201)
@@ -927,9 +1267,12 @@ def create_kek(
 ) -> dict[str, Any]:
     if not 1 <= payload.index <= 1024:
         raise HTTPException(422, "对称密钥索引必须为 1–1024")
+    validate_validity_days(payload.validity_days)
     protocol.admin(CMD_ADMIN_KEK_CREATE, (payload.index, 0, 0, 0))
-    audit(request, session["username"], "create", f"kek:{payload.index}", "success")
-    return next(item for item in protocol.keks() if item["index"] == payload.index)
+    save_key_lifecycle("SM4", "kek", payload.index, payload.validity_days)
+    audit(request, session["username"], "create", f"kek:{payload.index}", "success",
+          details=f"validity_days={payload.validity_days}")
+    return next(item for item in attach_key_lifecycle(protocol.keks(), "kek") if item["index"] == payload.index)
 
 
 @app.delete("/api/keks/{index}")
@@ -945,8 +1288,26 @@ def delete_kek(
     if payload.confirmation != "DELETE" or not verify_session_password(payload.password, session):
         raise HTTPException(403, "确认文字或管理员密码不正确")
     protocol.admin(CMD_ADMIN_KEK_DELETE, (index, 0, 0, 0))
+    delete_key_lifecycle("SM4", "kek", index)
     audit(request, session["username"], "delete", f"kek:{index}", "success")
     return {"deleted": True}
+
+
+@app.put("/api/keks/{index}/validity")
+def update_kek_validity(
+    index: int, payload: KeyValidityRequest, request: Request,
+    session: dict[str, Any] = Depends(require_roles("security_admin", csrf=True)),
+) -> dict[str, Any]:
+    if not 1 <= index <= 1024:
+        raise HTTPException(422, "对称密钥索引必须为 1–1024")
+    item = next((item for item in protocol.keks() if item["index"] == index), None)
+    if item is None:
+        raise HTTPException(404, "对称密钥不存在")
+    save_key_lifecycle("SM4", "kek", index, payload.validity_days,
+                       created_at=int(item.get("created_at") or time.time()))
+    audit(request, session["username"], "update_validity", f"kek:{index}", "success",
+          category="key", details=f"validity_days={payload.validity_days}")
+    return next(item for item in attach_key_lifecycle(protocol.keks(), "kek") if item["index"] == index)
 
 
 @app.post("/api/keks/{index}/enable")
@@ -1010,6 +1371,7 @@ def create_key(
     encoded = payload.password.encode()
     if len(encoded) != 0 and not 8 <= len(encoded) <= 256:
         raise HTTPException(422, "密钥口令必须为空或 8–256 字节")
+    validate_validity_days(payload.validity_days)
     if algorithm == "RSA":
         bits = 2048 if payload.bits is None else payload.bits
         if bits < 1024 or bits > 2048 or bits % 256:
@@ -1021,9 +1383,11 @@ def create_key(
             raise HTTPException(422, "SM2 密钥长度必须为 256")
         command = CMD_ADMIN_KEY_CREATE
     protocol.admin(command, tuple(params), encoded)
+    save_key_lifecycle(algorithm, payload.type, payload.index, payload.validity_days)
     target = f"{algorithm.lower()}:{payload.type}:{payload.index}"
-    audit(request, session["username"], "create", target, "success", category="key")
-    return next(item for item in protocol.keys() if item["algorithm"] == algorithm and item["type"] == payload.type and item["index"] == payload.index)
+    audit(request, session["username"], "create", target, "success", category="key",
+          details=f"validity_days={payload.validity_days}")
+    return next(item for item in attach_key_lifecycle(protocol.keys()) if item["algorithm"] == algorithm and item["type"] == payload.type and item["index"] == payload.index)
 
 
 @app.delete("/api/keys/{key_type}/{index}")
@@ -1037,8 +1401,32 @@ def delete_key(
     algorithm = key_algorithm(algorithm)
     command = key_admin_command(algorithm, CMD_ADMIN_KEY_DELETE, CMD_ADMIN_RSA_KEY_DELETE)
     protocol.admin(command, key_params(key_type, index))
+    delete_key_lifecycle(algorithm, key_type, index)
     audit(request, session["username"], "delete", f"{algorithm.lower()}:{key_type}:{index}", "success", category="key")
     return {"deleted": True}
+
+
+@app.put("/api/keys/{key_type}/{index}/validity")
+def update_key_validity(
+    key_type: str, index: int, payload: KeyValidityRequest, request: Request,
+    algorithm: str = "SM2",
+    session: dict[str, Any] = Depends(require_roles("security_admin", csrf=True)),
+) -> dict[str, Any]:
+    algorithm = key_algorithm(algorithm)
+    key_params(key_type, index)
+    item = next((item for item in protocol.keys()
+                 if item["algorithm"] == algorithm and item["type"] == key_type
+                 and item["index"] == index), None)
+    if item is None:
+        raise HTTPException(404, "内部密钥不存在")
+    save_key_lifecycle(algorithm, key_type, index, payload.validity_days,
+                       created_at=int(item.get("created_at") or time.time()))
+    audit(request, session["username"], "update_validity",
+          f"{algorithm.lower()}:{key_type}:{index}", "success", category="key",
+          details=f"validity_days={payload.validity_days}")
+    return next(item for item in attach_key_lifecycle(protocol.keys())
+                if item["algorithm"] == algorithm and item["type"] == key_type
+                and item["index"] == index)
 
 
 @app.post("/api/keys/{key_type}/{index}/enable")
@@ -1114,9 +1502,10 @@ def reindex_key(key_type: str, index: int, payload: KeyReindexRequest,
     algorithm = key_algorithm(algorithm)
     command = key_admin_command(algorithm, CMD_ADMIN_KEY_REINDEX, CMD_ADMIN_RSA_KEY_REINDEX)
     protocol.admin(command, (old_params[0], index, payload.new_index, 0))
+    reindex_key_lifecycle(algorithm, key_type, index, payload.new_index)
     audit(request, session["username"], "reindex", f"{algorithm.lower()}:{key_type}:{index}",
         "success", category="key", details=f"new_index={payload.new_index}")
-    return next(item for item in protocol.keys() if item["algorithm"] == algorithm and item["type"] == key_type and item["index"] == payload.new_index)
+    return next(item for item in attach_key_lifecycle(protocol.keys()) if item["algorithm"] == algorithm and item["type"] == key_type and item["index"] == payload.new_index)
 @app.get("/api/sessions")
 def list_sessions(_: dict[str, Any] = Depends(require_roles("system_admin"))) -> list[dict[str, Any]]:
     return protocol.sessions()
@@ -1197,64 +1586,181 @@ def update_audit_settings(
     return {"retention_days": payload.retention_days, "display_level": level}
 
 
-@app.get("/api/audit")
-def get_audit(
-    limit: int = 100,
-    _: dict[str, Any] = Depends(require_roles("audit_admin")),
-) -> list[dict[str, Any]]:
-    limit = max(1, min(limit, 500))
-    settings = read_audit_settings()
-    threshold = AUDIT_LEVEL_ORDER[settings["display_level"]]
+def split_filter_values(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def audit_filter_sql(
+    *, start_at: int | None = None, end_at: int | None = None,
+    minimum_level: str = "", levels: str = "", categories: str = "",
+    results: str = "", username: str = "", action: str = "", target: str = "",
+    remote_addr_filter: str = "", request_id: str = "", method: str = "",
+    path: str = "", keyword: str = "",
+) -> tuple[str, list[Any]]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if start_at is not None:
+        clauses.append("occurred_at >= ?"); params.append(start_at)
+    if end_at is not None:
+        clauses.append("occurred_at <= ?"); params.append(end_at)
+    selected_levels = [item.upper() for item in split_filter_values(levels)]
+    if selected_levels:
+        invalid = set(selected_levels) - set(AUDIT_LEVEL_ORDER)
+        if invalid:
+            raise HTTPException(422, "指定级别包含无效值")
+        marks = ",".join("?" for _ in selected_levels)
+        clauses.append(f"level IN ({marks})"); params.extend(selected_levels)
+    else:
+        normalized_minimum = minimum_level.strip().upper()
+        if normalized_minimum:
+            if normalized_minimum not in AUDIT_LEVEL_ORDER:
+                raise HTTPException(422, "最低级别必须为 DEBUG、INFO、WARN 或 ERROR")
+            clauses.append(
+                "CASE level WHEN 'DEBUG' THEN 10 WHEN 'WARN' THEN 30 "
+                "WHEN 'ERROR' THEN 40 ELSE 20 END >= ?"
+            )
+            params.append(AUDIT_LEVEL_ORDER[normalized_minimum])
+    for column, raw in (("category", categories), ("result", results)):
+        values = split_filter_values(raw)
+        if values:
+            marks = ",".join("?" for _ in values)
+            clauses.append(f"{column} IN ({marks})"); params.extend(values)
+    for column, value in (
+        ("username", username), ("action", action), ("target", target),
+        ("remote_addr", remote_addr_filter), ("request_id", request_id),
+        ("method", method), ("path", path),
+    ):
+        if value.strip():
+            clauses.append(f"{column} LIKE ?")
+            params.append(f"%{value.strip()}%")
+    if keyword.strip():
+        fields = ("username", "action", "target", "remote_addr", "request_id", "path", "details")
+        clauses.append("(" + " OR ".join(f"{field} LIKE ?" for field in fields) + ")")
+        params.extend([f"%{keyword.strip()}%"] * len(fields))
+    return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
+
+
+def query_audit_rows(*, limit: int, order: str, **filters: Any) -> list[dict[str, Any]]:
+    where, params = audit_filter_sql(**filters)
+    direction = "ASC" if order.lower() == "asc" else "DESC"
     with db() as connection:
         rows = connection.execute(
-            """
+            f"""
             SELECT id, occurred_at, username, action, target, result, remote_addr,
                    level, category, request_id, method, path, details, user_agent
-            FROM audit
-            WHERE CASE level WHEN 'DEBUG' THEN 10 WHEN 'WARN' THEN 30
-                  WHEN 'ERROR' THEN 40 ELSE 20 END >= ?
-            ORDER BY id DESC LIMIT ?
+            FROM audit{where} ORDER BY id {direction} LIMIT ?
             """,
-            (threshold, limit),
+            (*params, limit),
         ).fetchall()
     return [dict(row) for row in rows]
 
 
+@app.get("/api/audit/options")
+def get_audit_options(
+    _: dict[str, Any] = Depends(require_roles("audit_admin")),
+) -> dict[str, Any]:
+    with db() as connection:
+        distinct = {
+            column: [row[0] for row in connection.execute(
+                f"SELECT DISTINCT {column} FROM audit WHERE {column} <> '' ORDER BY {column}"
+            ).fetchall()]
+            for column in ("category", "result", "username", "action", "method")
+        }
+    return {
+        **distinct,
+        "levels": list(AUDIT_LEVEL_ORDER),
+        "formats": sorted(AUDIT_EXPORT_FORMATS),
+        "fields": list(AUDIT_EXPORT_FIELDS),
+    }
+
+
+@app.get("/api/audit")
+def get_audit(
+    limit: int = 200, order: str = "desc", start_at: int | None = None,
+    end_at: int | None = None, minimum_level: str = "", levels: str = "",
+    categories: str = "", results: str = "", username: str = "",
+    action: str = "", target: str = "", remote_addr: str = "",
+    request_id: str = "", method: str = "", path: str = "", keyword: str = "",
+    _: dict[str, Any] = Depends(require_roles("audit_admin")),
+) -> list[dict[str, Any]]:
+    if start_at is not None and end_at is not None and start_at > end_at:
+        raise HTTPException(422, "开始时间不能晚于结束时间")
+    if order.lower() not in {"asc", "desc"}:
+        raise HTTPException(422, "排序方式必须为 asc 或 desc")
+    if not levels.strip() and not minimum_level.strip():
+        minimum_level = read_audit_settings()["display_level"]
+    return query_audit_rows(
+        limit=max(1, min(limit, 2000)), order=order, start_at=start_at, end_at=end_at,
+        minimum_level=minimum_level, levels=levels, categories=categories,
+        results=results, username=username, action=action, target=target,
+        remote_addr_filter=remote_addr, request_id=request_id, method=method,
+        path=path, keyword=keyword,
+    )
+
+
 @app.get("/api/audit/export")
 def export_audit(
+    format: str = "txt", fields: str = "", include_header: bool = True,
+    limit: int = 100000, order: str = "asc", start_at: int | None = None,
+    end_at: int | None = None, minimum_level: str = "", levels: str = "",
+    categories: str = "", results: str = "", username: str = "",
+    action: str = "", target: str = "", remote_addr: str = "",
+    request_id: str = "", method: str = "", path: str = "", keyword: str = "",
     _: dict[str, Any] = Depends(require_roles("audit_admin")),
-) -> PlainTextResponse:
-    settings = read_audit_settings()
-    threshold = AUDIT_LEVEL_ORDER[settings["display_level"]]
-    with db() as connection:
-        rows = connection.execute(
-            """
-            SELECT occurred_at, username, action, target, result, remote_addr,
-                   level, category, request_id, method, path, details
-            FROM audit
-            WHERE CASE level WHEN 'DEBUG' THEN 10 WHEN 'WARN' THEN 30
-                  WHEN 'ERROR' THEN 40 ELSE 20 END >= ?
-            ORDER BY id ASC
-            """,
-            (threshold,),
-        ).fetchall()
-    lines = []
+) -> Response:
+    export_format = format.lower()
+    if export_format not in AUDIT_EXPORT_FORMATS:
+        raise HTTPException(422, "导出格式必须为 txt、csv 或 jsonl")
+    if start_at is not None and end_at is not None and start_at > end_at:
+        raise HTTPException(422, "开始时间不能晚于结束时间")
+    if order.lower() not in {"asc", "desc"}:
+        raise HTTPException(422, "排序方式必须为 asc 或 desc")
+    if not levels.strip() and not minimum_level.strip():
+        minimum_level = read_audit_settings()["display_level"]
+    selected_fields = split_filter_values(fields) or list(AUDIT_EXPORT_FIELDS)
+    if not selected_fields or set(selected_fields) - set(AUDIT_EXPORT_FIELDS):
+        raise HTTPException(422, "导出字段包含无效值")
+    rows = query_audit_rows(
+        limit=max(1, min(limit, 100000)), order=order, start_at=start_at,
+        end_at=end_at, minimum_level=minimum_level, levels=levels,
+        categories=categories, results=results, username=username, action=action,
+        target=target, remote_addr_filter=remote_addr, request_id=request_id,
+        method=method, path=path, keyword=keyword,
+    )
+    documents: list[dict[str, Any]] = []
     for row in rows:
-        stamp = datetime.fromtimestamp(row["occurred_at"], timezone.utc).astimezone()
-        line = (
-            f"{stamp:%Y-%m-%d %H:%M:%S,%f} {row['level']} "
-            f"[{row['category']}] [{row['username']}@{row['remote_addr']}] "
-            f"[request:{row['request_id'] or '-'}] {row['method']} {row['path']} "
-            f"action={row['action']} target={row['target']} result={row['result']}"
-        )
-        if row["details"]:
-            line += f" details={row['details']}"
-        lines.append(line)
-    content = "\n".join(lines) + ("\n" if lines else "")
-    filename = f"cryptokit-audit-{datetime.now():%Y%m%d-%H%M%S}.txt"
-    return PlainTextResponse(
-        content,
-        media_type="text/plain; charset=utf-8",
+        item = {field: row.get(field, "") for field in selected_fields}
+        if "occurred_at" in item:
+            stamp = datetime.fromtimestamp(int(item["occurred_at"]), timezone.utc).astimezone()
+            item["occurred_at"] = f"{stamp:%Y-%m-%d %H:%M:%S%z}"
+        documents.append(item)
+
+    if export_format == "csv":
+        stream = io.StringIO(newline="")
+        writer = csv.DictWriter(stream, fieldnames=selected_fields)
+        if include_header:
+            writer.writeheader()
+        writer.writerows(documents)
+        content = "\ufeff" + stream.getvalue()
+        media_type = "text/csv; charset=utf-8"
+    elif export_format == "jsonl":
+        content = "\n".join(json.dumps(item, ensure_ascii=False) for item in documents)
+        content += "\n" if content else ""
+        media_type = "application/x-ndjson; charset=utf-8"
+    else:
+        lines: list[str] = []
+        if include_header:
+            lines.extend((
+                f"# {PRODUCT_NAME} v{PRODUCT_VERSION} 审计日志",
+                f"# exported_at={datetime.now().astimezone():%Y-%m-%d %H:%M:%S%z} records={len(documents)}",
+                f"# fields={','.join(selected_fields)}",
+            ))
+        lines.extend("\t".join(f"{field}={item.get(field, '')}" for field in selected_fields) for item in documents)
+        content = "\n".join(lines) + ("\n" if lines else "")
+        media_type = "text/plain; charset=utf-8"
+    filename = f"cryptokit-audit-{datetime.now():%Y%m%d-%H%M%S}.{export_format}"
+    return Response(
+        content, media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(sdfx 
-    VERSION 1.0.0
+    VERSION 1.1.2
     DESCRIPTION "SDFX - Software SDF Implementation based on GM/T 0018-2023"
     LANGUAGES C
 )

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>CryptoKit SoftHSM Manager</title>
+  <title>CryptoKit 软件服务器密码机管理平台 1.1.2</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -11,11 +11,12 @@
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">CK</div>
-        <div><strong>CryptoKit</strong><span>SoftHSM Manager</span></div>
+        <div><strong>CryptoKit</strong><span>软件服务器密码机 v1.1.2</span></div>
       </div>
       <nav id="nav" hidden>
         <button data-page="administrators">管理员管理</button>
         <button data-page="dashboard" class="active">运行概览</button>
+        <button data-page="service">服务管理</button>
         <button data-page="keys">密钥管理</button>
         <button data-page="device">设备信息</button>
         <button data-page="sessions">会话管理</button>
@@ -36,7 +37,7 @@
 
     <main>
       <header class="topbar">
-        <div><p class="eyebrow">GMT 0018-2023 软件密码机</p><h1 id="page-title">初始化</h1></div>
+        <div><p class="eyebrow">GM/T 0018-2023 软件服务器密码机</p><h1 id="page-title">初始化</h1></div>
         <button id="logout" class="button ghost" hidden>退出登录</button>
       </header>
 
@@ -97,11 +98,40 @@
           <div class="panel table-wrap"><table><thead><tr><th>用户名</th><th>角色</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="admin-rows"></tbody></table></div>
         </div>
 
+        <div id="page-service" class="page" hidden>
+          <div class="page-actions"><div><p class="eyebrow">容器内进程控制</p><h2>SDF 密码服务</h2></div><button id="refresh-service" class="button ghost">刷新</button></div>
+          <div class="metric-grid">
+            <article class="metric"><span>服务状态</span><strong id="service-state">—</strong><small>Supervisor 进程状态</small></article>
+            <article class="metric"><span>服务地址</span><strong id="service-address">—</strong><small>SDF TCP 监听地址</small></article>
+            <article class="metric"><span>运行时长</span><strong id="service-uptime">—</strong><small>本次启动累计</small></article>
+            <article class="metric"><span>累计请求</span><strong id="service-requests">—</strong><small>本次服务启动</small></article>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><p class="eyebrow">运行详情</p><h2>密码机后台进程</h2></div><span id="service-state-badge" class="status off">未知</span></div>
+            <dl class="detail-grid">
+              <div><dt>监听地址</dt><dd id="service-host">—</dd></div>
+              <div><dt>监听端口</dt><dd id="service-port">—</dd></div>
+              <div><dt>启动时间</dt><dd id="service-started-at">—</dd></div>
+              <div><dt>进程 PID</dt><dd id="service-pid">—</dd></div>
+              <div><dt>活动会话</dt><dd id="service-sessions">—</dd></div>
+              <div><dt>密钥数量</dt><dd id="service-keys">—</dd></div>
+              <div><dt>最近停止时间</dt><dd id="service-stopped-at">—</dd></div>
+              <div><dt>进程说明</dt><dd id="service-description">—</dd></div>
+            </dl>
+            <p id="service-error" class="danger-copy" hidden></p>
+          </div>
+          <div class="panel service-control">
+            <div><p class="eyebrow">教学运维操作</p><h2>启动、停止或重启密码服务</h2><p class="muted">操作的是同一容器内的 <code>sdfxd</code> 进程，Web 管理端不会停止。停止或重启会断开所有现有 SDF 客户端与会话，但不会删除持久化密钥、账号或配置。</p></div>
+            <div class="actions"><button id="start-service" class="button primary">启动服务</button><button id="restart-service" class="button warning">重启服务</button><button id="stop-service" class="button danger">停止服务</button></div>
+          </div>
+        </div>
+
         <div id="page-keys" class="page" hidden>
           <div class="page-actions"><div><p class="eyebrow">受保护对象</p><h2>非对称密钥</h2></div><button id="open-key-dialog" class="button primary">生成密钥</button></div>
-          <div class="panel table-wrap"><table><thead><tr><th>用途</th><th>索引</th><th>算法</th><th>状态</th><th>完整性</th><th>指纹</th><th>操作</th></tr></thead><tbody id="key-rows"></tbody></table></div>
-          <div class="page-actions subsection"><div><p class="eyebrow">会话密钥封装</p><h2>对称密钥</h2></div><button id="open-kek-dialog" class="button primary">生成对称密钥</button></div>
-          <div class="panel table-wrap"><table><thead><tr><th>用途</th><th>索引</th><th>算法</th><th>状态</th><th>完整性</th><th>指纹</th><th>操作</th></tr></thead><tbody id="kek-rows"></tbody></table></div>
+          <div id="key-expiry-summary" class="lifecycle-summary" hidden></div>
+          <div class="panel table-wrap"><table><thead><tr><th>用途</th><th>索引</th><th>算法</th><th>状态</th><th>完整性</th><th>创建时间</th><th>有效期</th><th>指纹</th><th>操作</th></tr></thead><tbody id="key-rows"></tbody></table></div>
+          <div class="page-actions subsection"><div><p class="eyebrow">受保护对象</p><h2>密钥加密密钥</h2></div><button id="open-kek-dialog" class="button primary">生成对称密钥</button></div>
+          <div class="panel table-wrap"><table><thead><tr><th>用途</th><th>索引</th><th>算法</th><th>状态</th><th>完整性</th><th>创建时间</th><th>有效期</th><th>指纹</th><th>操作</th></tr></thead><tbody id="kek-rows"></tbody></table></div>
         </div>
 
         <div id="page-device" class="page" hidden>
@@ -140,13 +170,54 @@
         </div>
 
         <div id="page-audit" class="page" hidden>
-          <div class="page-actions"><div><p class="eyebrow">安全事件</p><h2>审计日志</h2></div><div class="actions"><button id="export-audit" class="button ghost">导出 TXT</button><button id="refresh-audit" class="button ghost">刷新</button></div></div>
+          <div class="page-actions"><div><p class="eyebrow">安全事件与 SDF 调用错误</p><h2>审计日志</h2></div><button id="refresh-audit" class="button ghost">刷新</button></div>
           <form id="audit-settings-form" class="panel form-grid compact">
             <label>日志保留天数<input name="retention_days" type="number" min="1" max="3650" required></label>
-            <label>最低显示/导出级别<select name="display_level"><option value="DEBUG">DEBUG</option><option value="INFO">INFO</option><option value="WARN">WARN</option><option value="ERROR">ERROR</option></select></label>
+            <label>默认最低显示级别<select name="display_level"><option value="DEBUG">DEBUG</option><option value="INFO">INFO</option><option value="WARN">WARN</option><option value="ERROR">ERROR</option></select></label>
             <div class="form-actions"><button class="button primary" type="submit">保存日志配置</button></div>
           </form>
-          <div class="panel table-wrap"><table><thead><tr><th>时间</th><th>级别</th><th>分类</th><th>管理员</th><th>操作</th><th>目标</th><th>结果</th><th>来源</th><th>详情</th></tr></thead><tbody id="audit-rows"></tbody></table></div>
+          <form id="audit-filter-form" class="panel audit-filter-grid">
+            <div class="filter-heading"><div><p class="eyebrow">组合查询</p><h2>筛选条件</h2></div><div class="actions"><button type="reset" class="button ghost">清空</button><button class="button primary" type="submit">应用筛选</button></div></div>
+            <label>开始时间<input name="start_at" type="datetime-local"></label>
+            <label>结束时间<input name="end_at" type="datetime-local"></label>
+            <label>日志级别（可多选）<select name="levels" multiple size="4"><option>DEBUG</option><option>INFO</option><option>WARN</option><option>ERROR</option></select></label>
+            <label>日志类型（可多选）<select name="categories" multiple size="4"></select></label>
+            <label>执行结果（可多选）<select name="results" multiple size="4"></select></label>
+            <label>管理员<input name="username" placeholder="支持部分匹配"></label>
+            <label>操作<input name="action" placeholder="如 sdf_call_failed"></label>
+            <label>目标<input name="target" placeholder="如 command:0x0060"></label>
+            <label>来源地址<input name="remote_addr" placeholder="IP 或 local"></label>
+            <label>请求号<input name="request_id" placeholder="X-Request-ID"></label>
+            <label>HTTP 方法<select name="method"><option value="">全部</option><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select></label>
+            <label>接口路径<input name="path" placeholder="如 /api/keys"></label>
+            <label>全文关键字<input name="keyword" placeholder="管理员、操作、目标、路径或详情"></label>
+            <label>显示条数<select name="limit"><option>100</option><option selected>200</option><option>500</option><option>1000</option><option>2000</option></select></label>
+            <label>排序<select name="order"><option value="desc">最新在前</option><option value="asc">最早在前</option></select></label>
+          </form>
+          <form id="audit-export-form" class="panel audit-export-grid">
+            <div class="filter-heading"><div><p class="eyebrow">精细导出</p><h2>导出选项</h2></div><button id="export-audit" class="button primary" type="submit">导出日志</button></div>
+            <label>文件格式<select name="format"><option value="txt">TXT 文本</option><option value="csv">CSV 表格</option><option value="jsonl">JSON Lines</option></select></label>
+            <label>最大导出条数<input name="limit" type="number" min="1" max="100000" value="100000"></label>
+            <label>导出排序<select name="order"><option value="asc">最早在前</option><option value="desc">最新在前</option></select></label>
+            <label class="check"><input name="include_header" type="checkbox" checked> 包含标题/表头</label>
+            <fieldset class="export-fields"><legend>导出字段</legend>
+              <label class="check"><input type="checkbox" name="fields" value="occurred_at" checked>时间</label>
+              <label class="check"><input type="checkbox" name="fields" value="level" checked>级别</label>
+              <label class="check"><input type="checkbox" name="fields" value="category" checked>类型</label>
+              <label class="check"><input type="checkbox" name="fields" value="username" checked>管理员</label>
+              <label class="check"><input type="checkbox" name="fields" value="action" checked>操作</label>
+              <label class="check"><input type="checkbox" name="fields" value="target" checked>目标</label>
+              <label class="check"><input type="checkbox" name="fields" value="result" checked>结果</label>
+              <label class="check"><input type="checkbox" name="fields" value="remote_addr" checked>来源</label>
+              <label class="check"><input type="checkbox" name="fields" value="request_id" checked>请求号</label>
+              <label class="check"><input type="checkbox" name="fields" value="method" checked>方法</label>
+              <label class="check"><input type="checkbox" name="fields" value="path" checked>路径</label>
+              <label class="check"><input type="checkbox" name="fields" value="details" checked>详情</label>
+              <label class="check"><input type="checkbox" name="fields" value="user_agent">User-Agent</label>
+            </fieldset>
+            <p class="muted export-note">导出沿用上面的全部筛选条件，所见条件与导出范围一致。</p>
+          </form>
+          <div class="panel table-wrap"><table><thead><tr><th>时间</th><th>级别</th><th>类型</th><th>管理员</th><th>操作</th><th>目标</th><th>结果</th><th>来源</th><th>请求号</th><th>方法</th><th>路径</th><th>详情</th></tr></thead><tbody id="audit-rows"></tbody></table></div>
         </div>
       </section>
     </main>
@@ -160,6 +231,7 @@
       <label>密钥长度（位）<input name="bits" type="number" value="256" min="256" max="256" step="256" required></label>
       <label>密钥索引<input name="index" type="number" min="1" max="1024" required></label>
       <label>私钥访问控制码（可选）<input name="password" type="password" minlength="8" autocomplete="new-password" placeholder="留空表示不使用口令"></label>
+      <label>有效期（天）<input name="validity_days" type="number" value="365" min="0" max="36500" required><small class="muted">0 表示长期有效；到期仅告警，不影响教学调用。</small></label>
       <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button primary" type="submit">生成</button></div>
     </form>
   </dialog>
@@ -201,7 +273,28 @@
       <div class="dialog-head"><h2>生成对称密钥</h2><button type="button" class="icon-button" data-close>×</button></div>
       <p class="muted">生成 128 位 SM4 对称密钥。密钥记录与索引使用设备根密钥派生的 HMAC-SM3 完整性保护，密钥材料不会通过管理端导出。</p>
       <label>对称密钥索引<input name="index" type="number" min="1" max="1024" required></label>
+      <label>有效期（天）<input name="validity_days" type="number" value="365" min="0" max="36500" required><small class="muted">0 表示长期有效；到期仅告警。</small></label>
       <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button primary" type="submit">生成</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="service-dialog">
+    <form id="service-form" class="form-grid">
+      <div class="dialog-head"><h2 id="service-dialog-title">服务操作确认</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <input name="action" type="hidden">
+      <p id="service-dialog-copy" class="danger-copy"></p>
+      <label>确认文字<input name="confirmation" required autocomplete="off"></label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button id="service-submit" class="button danger" type="submit">确认操作</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="validity-dialog">
+    <form id="validity-form" class="form-grid">
+      <div class="dialog-head"><h2>设置密钥有效期</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <input name="algorithm" type="hidden"><input name="key_type" type="hidden"><input name="index" type="hidden">
+      <p class="muted">有效期从密钥创建时间起计算。到期后显示告警，但不会自动停用密钥，便于课堂演示。</p>
+      <label>有效期（天）<input name="validity_days" type="number" min="0" max="36500" required></label>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button primary" type="submit">保存有效期</button></div>
     </form>
   </dialog>
 

@@ -3,21 +3,23 @@
 async function loadKeks() {
   const rows = $("#kek-rows");
   if (!rows) return;
-  rows.innerHTML = '<tr><td colspan="7">正在读取…</td></tr>';
+  rows.innerHTML = '<tr><td colspan="9">正在读取…</td></tr>';
   try {
     const keks = await api("/api/keks");
     rows.innerHTML = "";
     if (!keks.length) {
-      rows.innerHTML = '<tr><td colspan="7">尚未生成对称密钥</td></tr>';
+      rows.innerHTML = '<tr><td colspan="9">尚未生成对称密钥</td></tr>';
       return;
     }
     for (const kek of keks) {
       const tr = document.createElement("tr");
-      ["会话密钥封装", kek.index, `${kek.algorithm}-${kek.bits}`].forEach((value) => {
-        const td = document.createElement("td");
-        td.textContent = value;
-        tr.append(td);
-      });
+      ["密钥加密密钥", kek.index, `${kek.algorithm}-${kek.bits}`].forEach(
+        (value) => {
+          const td = document.createElement("td");
+          td.textContent = value;
+          tr.append(td);
+        },
+      );
 
       const statusCell = document.createElement("td");
       const badge = document.createElement("span");
@@ -33,6 +35,14 @@ async function loadKeks() {
       integrityCell.append(integrityBadge);
       tr.append(integrityCell);
 
+      const created = document.createElement("td");
+      created.textContent = formatDateTime(kek.lifecycle_created_at || kek.created_at);
+      tr.append(created);
+
+      const validity = document.createElement("td");
+      validity.append(lifecycleBadge(kek));
+      tr.append(validity);
+
       const fingerprint = document.createElement("td");
       fingerprint.className = "fingerprint";
       fingerprint.title = kek.fingerprint;
@@ -41,33 +51,46 @@ async function loadKeks() {
 
       const actions = document.createElement("td");
       actions.className = "actions";
-      actions.append(actionButton("校验", "", async () => {
-        try {
-          const result = await api(`/api/keks/${kek.index}/verify`, {
-            method: "POST",
-            body: "{}",
-          });
-          notice(result.valid ? "HMAC-SM3 完整性校验通过" : "完整性校验失败", !result.valid);
-        } catch (error) {
-          notice(error.message, true);
-        }
-      }));
-      actions.append(actionButton(kek.enabled ? "停用" : "启用", "", async () => {
-        try {
-          await api(`/api/keks/${kek.index}/${kek.enabled ? "disable" : "enable"}`, {
-            method: "POST",
-            body: "{}",
-          });
-          await loadKeks();
-        } catch (error) {
-          notice(error.message, true);
-        }
-      }));
-      actions.append(actionButton("删除", "delete", () => {
-        const form = $("#kek-delete-form");
-        form.index.value = kek.index;
-        $("#kek-delete-dialog").showModal();
-      }));
+      actions.append(actionButton("有效期", "", () => openValidityDialog(kek, "kek")));
+      actions.append(
+        actionButton("校验", "", async () => {
+          try {
+            const result = await api(`/api/keks/${kek.index}/verify`, {
+              method: "POST",
+              body: "{}",
+            });
+            notice(
+              result.valid ? "HMAC-SM3 完整性校验通过" : "完整性校验失败",
+              !result.valid,
+            );
+          } catch (error) {
+            notice(error.message, true);
+          }
+        }),
+      );
+      actions.append(
+        actionButton(kek.enabled ? "停用" : "启用", "", async () => {
+          try {
+            await api(
+              `/api/keks/${kek.index}/${kek.enabled ? "disable" : "enable"}`,
+              {
+                method: "POST",
+                body: "{}",
+              },
+            );
+            await loadKeks();
+          } catch (error) {
+            notice(error.message, true);
+          }
+        }),
+      );
+      actions.append(
+        actionButton("删除", "delete", () => {
+          const form = $("#kek-delete-form");
+          form.index.value = kek.index;
+          $("#kek-delete-dialog").showModal();
+        }),
+      );
       tr.append(actions);
       rows.append(tr);
     }
@@ -77,13 +100,16 @@ async function loadKeks() {
   }
 }
 
-$("#open-kek-dialog").addEventListener("click", () => $("#kek-dialog").showModal());
+$("#open-kek-dialog").addEventListener("click", () =>
+  $("#kek-dialog").showModal(),
+);
 
 $("#kek-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   const data = formJson(form);
   data.index = Number(data.index);
+  data.validity_days = Number(data.validity_days);
   try {
     await api("/api/keks", { method: "POST", body: JSON.stringify(data) });
     $("#kek-dialog").close();

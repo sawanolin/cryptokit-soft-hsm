@@ -5,7 +5,7 @@
 1. GitHub 源码仓库：`cryptokit-soft-hsm`
 2. Docker Hub 镜像仓库：`cryptokit-soft-hsm`
 
-示例发布版本为 `1.0.0`，Git 标签为 `v1.0.0`。开始前统一替换：
+当前发布版本为 `1.1.2`，Git 标签为 `v1.1.2`。开始前统一核对：
 
 | 占位符                    | 替换内容                                       |
 | ------------------------- | ---------------------------------------------- |
@@ -149,7 +149,7 @@ docker compose down --volumes --remove-orphans
 ```powershell
 docker build --pull --platform linux/amd64 `
   --no-cache `
-  -t cryptokit-soft-hsm:1.0.0 .
+  -t cryptokit-soft-hsm:1.1.2 .
 ```
 
 使用刚构建的镜像强制创建新容器：
@@ -176,6 +176,12 @@ docker inspect `
 Test-NetConnection 127.0.0.1 -Port 18081
 Invoke-RestMethod http://127.0.0.1:18080/api/health
 ```
+
+发布前还应使用系统管理员登录“服务管理”，依次验证“重启服务”“停止服务”
+和“启动服务”。停止 `sdfxd` 后 Web 18080 及 `/api/health` 应保持可访问，
+健康响应中的 `daemon.running` 为 `false`；再次启动后应恢复为 `true` 且
+`daemon.daemon_available` 为 `true`。启停会断开现有 SDF 会话，验证时不要
+并行运行 SDK 测试。
 
 再从可信网络中的另一台机器把 `SERVER_IP` 换成 Docker 主机真实 IP，验证
 两个对外监听：
@@ -205,7 +211,7 @@ docker run -d `
   -p 127.0.0.1:18080:18080 `
   -v cryptokit-release-test-data:/var/lib/sdfx `
   --security-opt no-new-privileges:true `
-  cryptokit-soft-hsm:1.0.0
+  cryptokit-soft-hsm:1.1.2
 ```
 
 等待健康：
@@ -286,7 +292,7 @@ try {
 确认镜像平台：
 
 ```powershell
-docker image inspect cryptokit-soft-hsm:1.0.0 `
+docker image inspect cryptokit-soft-hsm:1.1.2 `
   --format '{{.Os}}/{{.Architecture}}'
 ```
 
@@ -426,7 +432,7 @@ cryptography
 windows-sdk
 ```
 
-## 六、创建 GitHub v1.0.0 Release
+## 六、创建 GitHub v1.1.2 Release
 
 ### 1. 打包最小化 Windows SDK
 
@@ -434,13 +440,13 @@ windows-sdk
 
 ```powershell
 .\scripts\build_windows_sdk.ps1
-.\scripts\package_windows_sdk.ps1 -Version 1.0.0 -Force
+.\scripts\package_windows_sdk.ps1 -Version 1.1.2 -Force
 ```
 
 `build_windows_sdk.ps1` 会验证 94 个公开导出及 DLL 依赖并更新 `dist`；`package_windows_sdk.ps1` 只复制主 DLL、MSVC/MinGW 导入库、3 个公开头文件、1 份配置模板、许可证和 README，并重新生成包内 `SHA256SUMS`。测试 EXE、OBJ、示例源码、CMake/pkg-config 文件、内部头文件以及重复 INI 均不会进入 ZIP。输出为：
 
 ```text
-release/sdfapi-windows-x64-1.0.0.zip
+release/sdfapi-windows-x64-1.1.2.zip
 ```
 
 脚本最后会输出 ZIP 的 SHA-256，把该值记录到 Release Notes。
@@ -448,8 +454,8 @@ release/sdfapi-windows-x64-1.0.0.zip
 ### 2. 创建带注释标签
 
 ```powershell
-git tag -a v1.0.0 -m 'CryptoKit SoftHSM 1.0.0'
-git push origin v1.0.0
+git tag -a v1.1.2 -m 'CryptoKit SoftHSM 1.1.2'
+git push origin v1.1.2
 ```
 
 ### 3. 创建 Release
@@ -457,13 +463,13 @@ git push origin v1.0.0
 使用 GitHub CLI：
 
 ```powershell
-gh release create v1.0.0 `
-  '.\release\sdfapi-windows-x64-1.0.0.zip' `
-  --title 'CryptoKit SoftHSM 1.0.0' `
+gh release create v1.1.2 `
+  '.\release\sdfapi-windows-x64-1.1.2.zip' `
+  --title 'CryptoKit SoftHSM 1.1.2' `
   --generate-notes
 ```
 
-也可以在 GitHub 的 Releases 页面选择 `v1.0.0`，填写说明并上传 ZIP。
+也可以在 GitHub 的 Releases 页面选择 `v1.1.2`，填写说明并上传 ZIP。
 GitHub Release 自动附带该标签对应源码的 ZIP 和 tar.gz。
 
 Release Notes 至少说明：
@@ -508,26 +514,26 @@ docker login --username YOUR_DOCKERHUB_USERNAME
 
 ### 2. 从发布提交重新构建
 
-确保当前提交就是 `v1.0.0`：
+确保当前提交就是 `v1.1.2`：
 
 ```powershell
 git status --short
 git rev-parse HEAD
-git rev-list -n 1 v1.0.0
+git rev-list -n 1 v1.1.2
 ```
 
 后两个提交 ID 应一致。然后构建两个标签：
 
 ```powershell
 docker build --platform linux/amd64 `
-  -t sawanolin/cryptokit-soft-hsm:1.1.0 `
+  -t sawanolin/cryptokit-soft-hsm:1.1.2 `
   -t sawanolin/cryptokit-soft-hsm:latest .
 ```
 
 ### 3. 推送固定版本和 latest
 
 ```powershell
-docker push sawanolin/cryptokit-soft-hsm:1.1.0
+docker push sawanolin/cryptokit-soft-hsm:1.1.2
 docker push sawanolin/cryptokit-soft-hsm:latest
 ```
 
@@ -537,7 +543,7 @@ docker push sawanolin/cryptokit-soft-hsm:latest
 
 ```powershell
 docker buildx imagetools inspect `
-  sawanolin/cryptokit-soft-hsm:1.0.0
+  sawanolin/cryptokit-soft-hsm:1.1.2
 ```
 
 把 Docker Hub 返回的 `sha256:` digest 记录到 GitHub Release Notes。
@@ -549,14 +555,14 @@ docker buildx imagetools inspect `
 使用一个没有本地同名标签的环境最好。至少执行：
 
 ```powershell
-docker pull YOUR_DOCKERHUB_USERNAME/cryptokit-soft-hsm:1.0.0
+docker pull YOUR_DOCKERHUB_USERNAME/cryptokit-soft-hsm:1.1.2
 
 docker run -d `
   --name cryptokit-hub-test `
   -p 0.0.0.0:18081:18081 `
   -p 0.0.0.0:18080:18080 `
   -v cryptokit-hub-test-data:/var/lib/sdfx `
-  YOUR_DOCKERHUB_USERNAME/cryptokit-soft-hsm:1.0.0
+  YOUR_DOCKERHUB_USERNAME/cryptokit-soft-hsm:1.1.2
 ```
 
 检查健康和 Web：
@@ -594,19 +600,19 @@ Docker Hub：
 
 | Git          | Docker Hub | GitHub Release            |
 | ------------ | ---------- | ------------------------- |
-| `v1.0.0`     | `:1.0.0`   | `CryptoKit SoftHSM 1.0.0` |
+| `v1.1.2`     | `:1.1.2`   | `CryptoKit SoftHSM 1.1.2` |
 | 最新稳定标签 | `:latest`  | 最新非预发布 Release      |
 
 ## 十一、以后发布新版本
 
-以 `1.1.0` 为例：
+以 `1.1.2` 为例：
 
 1. 更新版本号、`api-matrix.md` 和变更说明；
 2. 从干净数据卷完成 Linux、Web 和 Windows 全部测试；
-3. 提交并创建 `v1.1.0` 标签；
+3. 提交并创建 `v1.1.2` 标签；
 4. 创建 GitHub Release 和 Windows SDK ZIP；
-5. 从同一标签构建 `:1.1.0`；
-6. 推送 `:1.1.0`；
+5. 从同一标签构建 `:1.1.2`；
+6. 推送 `:1.1.2`；
 7. 最终验收通过后再更新 `:latest`；
 8. 在 Release Notes 记录 registry digest；
 9. 不覆盖或删除已经发布的固定版本标签。

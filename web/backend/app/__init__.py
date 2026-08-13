@@ -1,1 +1,1 @@
-"""CryptoKit SoftHSM Manager."""
+"""CryptoKit 软件服务器密码机管理平台 1.1.2。"""
