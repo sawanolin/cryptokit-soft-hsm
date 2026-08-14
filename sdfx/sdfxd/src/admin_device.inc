@@ -116,15 +116,16 @@ static void admin_device_info_reset_runtime(void)
 {
     DEVICEINFO reset = {
         .IssuerName = "SDFX Project",
-        .DeviceName = "SDFX-1.0",
+        .DeviceName = "SDFX-1.1.3",
         .DeviceSerial = "SW000001",
-        .DeviceVersion = 0x00010000,
+        .DeviceVersion = 0x00010103,
         .StandardVersion = 0x00020023,
         .AsymAlgAbility = {SGD_SM2_1 | SGD_SM2_2 | SGD_SM2_3, 256},
         .SymAlgAbility = SGD_SM4_ECB | SGD_SM4_CBC | SGD_SM4_CFB |
                          SGD_SM4_OFB | SGD_SM4_CTR | SGD_SM4_MAC |
                          SGD_SM4_GCM | SGD_SM4_CCM | SGD_SM4_XTS,
-        .HashAlgAbility = SGD_SM3,
+        .HashAlgAbility = SGD_SM3 | SGD_SHA256 |
+                          SGD_SM3_HMAC | SGD_SHA256_HMAC,
         .BufferSize = 4096
     };
     pthread_mutex_lock(&g_device_info_mutex);

@@ -12,12 +12,14 @@
 static CRYPT_MAC_AlgId vpn_hmac_alg(ULONG alg_id)
 {
     switch (alg_id) {
-        case SGD_SM3: return CRYPT_MAC_HMAC_SM3;
-        case SGD_SHA1: return CRYPT_MAC_HMAC_SHA1;
-        case SGD_SHA224: return CRYPT_MAC_HMAC_SHA224;
-        case SGD_SHA256: return CRYPT_MAC_HMAC_SHA256;
-        case SGD_SHA384: return CRYPT_MAC_HMAC_SHA384;
-        case SGD_SHA512: return CRYPT_MAC_HMAC_SHA512;
+        case SGD_SM3:
+        case SGD_SM3_HMAC: return CRYPT_MAC_HMAC_SM3;
+        case SDFX_SHA1: return CRYPT_MAC_HMAC_SHA1;
+        case SDFX_SHA224: return CRYPT_MAC_HMAC_SHA224;
+        case SGD_SHA256:
+        case SGD_SHA256_HMAC: return CRYPT_MAC_HMAC_SHA256;
+        case SDFX_SHA384: return CRYPT_MAC_HMAC_SHA384;
+        case SDFX_SHA512: return CRYPT_MAC_HMAC_SHA512;
         default: return CRYPT_MAC_MAX;
     }
 }

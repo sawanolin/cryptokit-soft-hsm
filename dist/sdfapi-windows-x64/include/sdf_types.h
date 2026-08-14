@@ -80,15 +80,15 @@ typedef struct DeviceInfo_st
 #define SGD_SSF33_OFB               0x00000208   /* SSF33 algorithm OFB mode */
 #define SGD_SSF33_MAC               0x00000210   /* SSF33 algorithm MAC mode */
 
-/* SMS4(SM4) 算法 (0x0004xxxx for traditional modes, 0x0200xxxx for new modes) */
+/* SMS4(SM4) 算法（标识值遵循 GM/T 0006-2023） */
 #define SGD_SM4_ECB                 0x00000401   /* SM4 algorithm ECB mode */
 #define SGD_SM4_CBC                 0x00000402   /* SM4 algorithm CBC mode */
 #define SGD_SM4_CFB                 0x00000404   /* SM4 algorithm CFB mode */
 #define SGD_SM4_OFB                 0x00000408   /* SM4 algorithm OFB mode */
 #define SGD_SM4_MAC                 0x00000410   /* SM4 algorithm MAC mode */
-#define SGD_SM4_GCM                 0x02000400   /* SM4 algorithm GCM mode (GM/T 0018-2023) */
-#define SGD_SM4_CCM                 0x04000400   /* SM4 algorithm CCM mode (GM/T 0018-2023) */
-#define SGD_SM4_XTS                 0x02000402   /* SM4 algorithm XTS mode (GM/T 0018-2023) */
+#define SGD_SM4_GCM                 0x02000400   /* SM4 algorithm GCM mode */
+#define SGD_SM4_CCM                 0x04000400   /* SM4 algorithm CCM mode */
+#define SGD_SM4_XTS                 0x01000400   /* SM4 algorithm XTS mode */
 #define SGD_SM4_CTR                 0x00000420   /* SM4 algorithm CTR mode (SGD_SM4 | SGD_CTR) */
 
 /* 非对称算法 (Asymmetric Algorithms) */
@@ -96,19 +96,45 @@ typedef struct DeviceInfo_st
 #define SGD_RSA                     0x00010000   /* RSA algorithm */
 
 /* SM2 算法 (0x0002xxxx) */
-#define SGD_SM2_1                   0x00020100   /* SM2 elliptic curve sign algorithm */
-#define SGD_SM2_2                   0x00020200   /* SM2 elliptic curve key exchange protocol */
-#define SGD_SM2_3                   0x00020400   /* SM2 elliptic curve encryption algorithm */
+#define SGD_SM2                     0x00020100   /* SM2 elliptic curve cryptographic algorithm */
+#define SGD_SM2_1                   0x00020200   /* SM2 elliptic curve sign algorithm */
+#define SGD_SM2_2                   0x00020400   /* SM2 elliptic curve key exchange protocol */
+#define SGD_SM2_3                   0x00020800   /* SM2 elliptic curve encryption algorithm */
 
-/* 杂凑算法 (Hash Algorithms) */
+/* GM/T 0006-2023 标准杂凑及 HMAC 算法标识 */
 #define SGD_SM3                     0x00000001   /* SM3 cryptographic hash algorithm */
-#define SGD_SHA1                    0x00000002   /* SHA1 hash algorithm */
-#define SGD_SHA224                  0x00000003   /* SHA224 hash algorithm */
 #define SGD_SHA256                  0x00000004   /* SHA256 hash algorithm */
-#define SGD_SHA384                  0x00000005   /* SHA384 hash algorithm */
-#define SGD_SHA512                  0x00000006   /* SHA512 hash algorithm */
-#define SGD_SHA512_224              0x00000007   /* SHA512/224 hash algorithm */
-#define SGD_SHA512_256              0x00000008   /* SHA512/256 hash algorithm */
+#define SGD_SM3_HMAC                0x00000008   /* HMAC-SM3 algorithm */
+#define SGD_SHA256_HMAC             0x00000010   /* HMAC-SHA256 algorithm */
+
+/*
+ * SDFX 教学扩展杂凑标识。
+ * GM/T 0006-2023 将 0x00000020～0x000000FF 预留给自定义杂凑算法。
+ * 这些标识不是 GM/T 0006 标准算法标识，不写入标准设备能力字段。
+ */
+#define SDFX_SHA1                   0x00000020
+#define SDFX_SHA224                 0x00000021
+#define SDFX_SHA384                 0x00000022
+#define SDFX_SHA512                 0x00000023
+#define SDFX_SHA512_224             0x00000024   /* identifier reserved; implementation unavailable */
+#define SDFX_SHA512_256             0x00000025   /* identifier reserved; implementation unavailable */
+
+/* Deprecated source-compatibility aliases for pre-1.1.3 teaching programs. */
+#define SGD_SHA1                    SDFX_SHA1
+#define SGD_SHA224                  SDFX_SHA224
+#define SGD_SHA384                  SDFX_SHA384
+#define SGD_SHA512                  SDFX_SHA512
+#define SGD_SHA512_224              SDFX_SHA512_224
+#define SGD_SHA512_256              SDFX_SHA512_256
+
+/* Catch accidental protocol regressions at compile time. */
+SDFX_STATIC_ASSERT(SGD_SM4_XTS == 0x01000400, "GM/T 0006 SM4-XTS identifier mismatch");
+SDFX_STATIC_ASSERT(SGD_SM2 == 0x00020100, "GM/T 0006 SM2 identifier mismatch");
+SDFX_STATIC_ASSERT(SGD_SM2_1 == 0x00020200, "GM/T 0006 SM2 sign identifier mismatch");
+SDFX_STATIC_ASSERT(SGD_SM2_2 == 0x00020400, "GM/T 0006 SM2 agreement identifier mismatch");
+SDFX_STATIC_ASSERT(SGD_SM2_3 == 0x00020800, "GM/T 0006 SM2 encryption identifier mismatch");
+SDFX_STATIC_ASSERT(SGD_SM3_HMAC == 0x00000008, "GM/T 0006 HMAC-SM3 identifier mismatch");
+SDFX_STATIC_ASSERT(SGD_SHA256_HMAC == 0x00000010, "GM/T 0006 HMAC-SHA256 identifier mismatch");
 
 /* SM9 算法 (0x0008xxxx) */
 #define SGD_SM9_1                   0x00080100   /* SM9 identity-based sign algorithm */
@@ -312,4 +338,3 @@ typedef struct SM9refSignEnvelopedKey_st
 #endif
 
 #endif /* __SDF_TYPES_H__ */
-

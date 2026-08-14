@@ -70,22 +70,39 @@ static int test_external_symmetric(HANDLE session)
 
 static int test_external_hmac(HANDLE session)
 {
-    static const BYTE expected[32] = {
-        0xbd,0x4a,0x34,0x07,0x78,0x88,0x16,0x2b,
-        0x21,0x06,0x45,0xb8,0xeb,0xf7,0x4b,0x9a,
-        0xf3,0x57,0x30,0x37,0x89,0x35,0x7a,0x27,
-        0xc7,0xfc,0x45,0x72,0x44,0xeb,0xd3,0x98
+    static const struct {
+        ULONG algorithm;
+        BYTE expected[32];
+    } vectors[] = {
+        { SGD_SM3_HMAC, {
+            0xbd,0x4a,0x34,0x07,0x78,0x88,0x16,0x2b,
+            0x21,0x06,0x45,0xb8,0xeb,0xf7,0x4b,0x9a,
+            0xf3,0x57,0x30,0x37,0x89,0x35,0x7a,0x27,
+            0xc7,0xfc,0x45,0x72,0x44,0xeb,0xd3,0x98
+        } },
+        { SGD_SHA256_HMAC, {
+            0xf7,0xbc,0x83,0xf4,0x30,0x53,0x84,0x24,
+            0xb1,0x32,0x98,0xe6,0xaa,0x6f,0xb1,0x43,
+            0xef,0x4d,0x59,0xa1,0x49,0x46,0x17,0x59,
+            0x97,0x47,0x9d,0xbc,0x2d,0x1a,0x3c,0xd8
+        } }
     };
     BYTE key[] = "key";
     BYTE message[] = "The quick brown fox jumps over the lazy dog";
     BYTE mac[64];
-    ULONG mac_len = sizeof(mac);
-    CHECK_OK(SDF_ExternalKeyHMACInit(session, SGD_SM3, key, 3));
-    CHECK_OK(SDF_HMACUpdate(session, message, 19));
-    CHECK_OK(SDF_HMACUpdate(session, message + 19, sizeof(message) - 1 - 19));
-    CHECK_OK(SDF_HMACFinal(session, mac, &mac_len));
-    return mac_len == sizeof(expected) &&
-           memcmp(mac, expected, sizeof(expected)) == 0 ? 0 : 1;
+    for (size_t i = 0; i < sizeof(vectors) / sizeof(vectors[0]); ++i) {
+        ULONG mac_len = sizeof(mac);
+        CHECK_OK(SDF_ExternalKeyHMACInit(session, vectors[i].algorithm, key, 3));
+        CHECK_OK(SDF_HMACUpdate(session, message, 19));
+        CHECK_OK(SDF_HMACUpdate(session, message + 19,
+                                sizeof(message) - 1 - 19));
+        CHECK_OK(SDF_HMACFinal(session, mac, &mac_len));
+        if (mac_len != sizeof(vectors[i].expected) ||
+            memcmp(mac, vectors[i].expected, mac_len) != 0) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static int test_auth_mode(HANDLE session, HANDLE key, ULONG alg,

@@ -333,7 +333,7 @@ typedef struct sdfx_external_decrypt_ecc_resp {
 /* ECC key pair generate request */
 typedef struct sdfx_generate_keypair_ecc_req {
     sdfx_remote_handle_t session_handle;
-    ULONG alg_id;             /* algorithm ID (SGD_SM2_1/2/3) */
+    ULONG alg_id;             /* algorithm ID (SGD_SM2 or SGD_SM2_1/2/3) */
 } sdfx_generate_keypair_ecc_req_t;
 
 /* ECC key pair generate response */

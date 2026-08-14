@@ -5,7 +5,7 @@
 1. GitHub 源码仓库：`cryptokit-soft-hsm`
 2. Docker Hub 镜像仓库：`cryptokit-soft-hsm`
 
-当前发布版本为 `1.1.2`，Git 标签为 `v1.1.2`。开始前统一核对：
+当前发布版本为 `1.1.3`，Git 标签为 `v1.1.3`。开始前统一核对：
 
 | 占位符                    | 替换内容                                       |
 | ------------------------- | ---------------------------------------------- |
@@ -149,7 +149,7 @@ docker compose down --volumes --remove-orphans
 ```powershell
 docker build --pull --platform linux/amd64 `
   --no-cache `
-  -t cryptokit-soft-hsm:1.1.2 .
+  -t cryptokit-soft-hsm:1.1.3 .
 ```
 
 使用刚构建的镜像强制创建新容器：
@@ -211,7 +211,7 @@ docker run -d `
   -p 127.0.0.1:18080:18080 `
   -v cryptokit-release-test-data:/var/lib/sdfx `
   --security-opt no-new-privileges:true `
-  cryptokit-soft-hsm:1.1.2
+  cryptokit-soft-hsm:1.1.3
 ```
 
 等待健康：
@@ -242,7 +242,11 @@ python tests\rbac_integrity_e2e.py --base-url http://127.0.0.1:18080
 
 该测试必须覆盖四角色权限、SM2/RSA 空口令、签名/加密不同索引、改索引、非对称/对称密钥 HMAC-SM3 校验、RSA 自检、对称密钥、备份、审计配置和 TXT 导出。
 
-还应在构建产物中运行 `test_hash`、`test_sm2` 和 `test_0018_extended`；后者覆盖流式 SM4、HMAC、GCM/CCM、XTS 和六个附录 C 接口。ECC 协商及内部密钥测试需要安全管理员在隔离卷中预置对应内部密钥。
+还应在构建产物中运行 `test_basic`、`test_hash`、`test_sm2` 和
+`test_0018_extended`。`test_basic` 会检查 GM/T 0006-2023 算法标识和设备
+能力字段；扩展测试覆盖流式 SM4、标准 HMAC-SM3/HMAC-SHA256 向量、
+GCM/CCM、XTS 和六个附录 C 接口。ECC 协商及内部密钥测试需要安全管理员
+在隔离卷中预置对应内部密钥。
 
 验证 Windows SDK 的导出和运行依赖：
 
@@ -292,7 +296,7 @@ try {
 确认镜像平台：
 
 ```powershell
-docker image inspect cryptokit-soft-hsm:1.1.2 `
+docker image inspect cryptokit-soft-hsm:1.1.3 `
   --format '{{.Os}}/{{.Architecture}}'
 ```
 
@@ -432,7 +436,7 @@ cryptography
 windows-sdk
 ```
 
-## 六、创建 GitHub v1.1.2 Release
+## 六、创建 GitHub v1.1.3 Release
 
 ### 1. 打包最小化 Windows SDK
 
@@ -440,22 +444,28 @@ windows-sdk
 
 ```powershell
 .\scripts\build_windows_sdk.ps1
-.\scripts\package_windows_sdk.ps1 -Version 1.1.2 -Force
+.\scripts\package_windows_sdk.ps1 -Version 1.1.3 -Force
 ```
 
 `build_windows_sdk.ps1` 会验证 94 个公开导出及 DLL 依赖并更新 `dist`；`package_windows_sdk.ps1` 只复制主 DLL、MSVC/MinGW 导入库、3 个公开头文件、1 份配置模板、许可证和 README，并重新生成包内 `SHA256SUMS`。测试 EXE、OBJ、示例源码、CMake/pkg-config 文件、内部头文件以及重复 INI 均不会进入 ZIP。输出为：
 
 ```text
-release/sdfapi-windows-x64-1.1.2.zip
+release/sdfapi-windows-x64-1.1.3.zip
 ```
+
+1.1.3 修正了 GM/T 0006-2023 算法标识。发布时必须同时重建 Docker 镜像和
+Windows SDK，不能把旧版 `sdfapi_x64.dll` 或旧 `sdf_types.h` 与新版服务端
+混用。打包前确认公共头文件中 SM2 签名/协商/加密分别为
+`0x00020200/0x00020400/0x00020800`，SM4-XTS 为 `0x01000400`，并确认
+`dist` 头文件与 `sdfx/include/sdf_types.h` 的 SHA-256 完全一致。
 
 脚本最后会输出 ZIP 的 SHA-256，把该值记录到 Release Notes。
 
 ### 2. 创建带注释标签
 
 ```powershell
-git tag -a v1.1.2 -m 'CryptoKit SoftHSM 1.1.2'
-git push origin v1.1.2
+git tag -a v1.1.3 -m 'CryptoKit SoftHSM 1.1.3'
+git push origin v1.1.3
 ```
 
 ### 3. 创建 Release
@@ -463,13 +473,13 @@ git push origin v1.1.2
 使用 GitHub CLI：
 
 ```powershell
-gh release create v1.1.2 `
-  '.\release\sdfapi-windows-x64-1.1.2.zip' `
-  --title 'CryptoKit SoftHSM 1.1.2' `
+gh release create v1.1.3 `
+  '.\release\sdfapi-windows-x64-1.1.3.zip' `
+  --title 'CryptoKit SoftHSM 1.1.3' `
   --generate-notes
 ```
 
-也可以在 GitHub 的 Releases 页面选择 `v1.1.2`，填写说明并上传 ZIP。
+也可以在 GitHub 的 Releases 页面选择 `v1.1.3`，填写说明并上传 ZIP。
 GitHub Release 自动附带该标签对应源码的 ZIP 和 tar.gz。
 
 Release Notes 至少说明：
@@ -514,26 +524,26 @@ docker login --username YOUR_DOCKERHUB_USERNAME
 
 ### 2. 从发布提交重新构建
 
-确保当前提交就是 `v1.1.2`：
+确保当前提交就是 `v1.1.3`：
 
 ```powershell
 git status --short
 git rev-parse HEAD
-git rev-list -n 1 v1.1.2
+git rev-list -n 1 v1.1.3
 ```
 
 后两个提交 ID 应一致。然后构建两个标签：
 
 ```powershell
 docker build --platform linux/amd64 `
-  -t sawanolin/cryptokit-soft-hsm:1.1.2 `
+  -t sawanolin/cryptokit-soft-hsm:1.1.3 `
   -t sawanolin/cryptokit-soft-hsm:latest .
 ```
 
 ### 3. 推送固定版本和 latest
 
 ```powershell
-docker push sawanolin/cryptokit-soft-hsm:1.1.2
+docker push sawanolin/cryptokit-soft-hsm:1.1.3
 docker push sawanolin/cryptokit-soft-hsm:latest
 ```
 
@@ -543,7 +553,7 @@ docker push sawanolin/cryptokit-soft-hsm:latest
 
 ```powershell
 docker buildx imagetools inspect `
-  sawanolin/cryptokit-soft-hsm:1.1.2
+  sawanolin/cryptokit-soft-hsm:1.1.3
 ```
 
 把 Docker Hub 返回的 `sha256:` digest 记录到 GitHub Release Notes。
@@ -555,14 +565,14 @@ docker buildx imagetools inspect `
 使用一个没有本地同名标签的环境最好。至少执行：
 
 ```powershell
-docker pull YOUR_DOCKERHUB_USERNAME/cryptokit-soft-hsm:1.1.2
+docker pull YOUR_DOCKERHUB_USERNAME/cryptokit-soft-hsm:1.1.3
 
 docker run -d `
   --name cryptokit-hub-test `
   -p 0.0.0.0:18081:18081 `
   -p 0.0.0.0:18080:18080 `
   -v cryptokit-hub-test-data:/var/lib/sdfx `
-  YOUR_DOCKERHUB_USERNAME/cryptokit-soft-hsm:1.1.2
+  YOUR_DOCKERHUB_USERNAME/cryptokit-soft-hsm:1.1.3
 ```
 
 检查健康和 Web：
@@ -600,19 +610,19 @@ Docker Hub：
 
 | Git          | Docker Hub | GitHub Release            |
 | ------------ | ---------- | ------------------------- |
-| `v1.1.2`     | `:1.1.2`   | `CryptoKit SoftHSM 1.1.2` |
+| `v1.1.3`     | `:1.1.3`   | `CryptoKit SoftHSM 1.1.3` |
 | 最新稳定标签 | `:latest`  | 最新非预发布 Release      |
 
 ## 十一、以后发布新版本
 
-以 `1.1.2` 为例：
+以 `1.1.3` 为例：
 
 1. 更新版本号、`api-matrix.md` 和变更说明；
 2. 从干净数据卷完成 Linux、Web 和 Windows 全部测试；
-3. 提交并创建 `v1.1.2` 标签；
+3. 提交并创建 `v1.1.3` 标签；
 4. 创建 GitHub Release 和 Windows SDK ZIP；
-5. 从同一标签构建 `:1.1.2`；
-6. 推送 `:1.1.2`；
+5. 从同一标签构建 `:1.1.3`；
+6. 推送 `:1.1.3`；
 7. 最终验收通过后再更新 `:latest`；
 8. 在 Release Notes 记录 registry digest；
 9. 不覆盖或删除已经发布的固定版本标签。

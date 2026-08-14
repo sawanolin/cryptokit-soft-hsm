@@ -301,25 +301,25 @@ int main()
     }
     
     /* Test SHA1 */
-    if (test_hash_algorithm(device_handle, session_handle, SGD_SHA1, "SHA1", 
+    if (test_hash_algorithm(device_handle, session_handle, SDFX_SHA1, "SHA1 (SDFX extension)",
                            NULL, 0) != 0) {
         test_result = 1;
     }
     
     /* Test SHA224 */
-    if (test_hash_algorithm(device_handle, session_handle, SGD_SHA224, "SHA224", 
+    if (test_hash_algorithm(device_handle, session_handle, SDFX_SHA224, "SHA224 (SDFX extension)",
                            NULL, 0) != 0) {
         test_result = 1;
     }
     
     /* Test SHA384 */
-    if (test_hash_algorithm(device_handle, session_handle, SGD_SHA384, "SHA384", 
+    if (test_hash_algorithm(device_handle, session_handle, SDFX_SHA384, "SHA384 (SDFX extension)",
                            NULL, 0) != 0) {
         test_result = 1;
     }
     
     /* Test SHA512 */
-    if (test_hash_algorithm(device_handle, session_handle, SGD_SHA512, "SHA512", 
+    if (test_hash_algorithm(device_handle, session_handle, SDFX_SHA512, "SHA512 (SDFX extension)",
                            NULL, 0) != 0) {
         test_result = 1;
     }

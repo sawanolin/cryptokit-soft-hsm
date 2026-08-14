@@ -38,15 +38,15 @@ static CRYPT_MD_AlgId sdf_to_hitls_hash_alg(ULONG sdf_alg_id)
     switch (sdf_alg_id) {
         case SGD_SM3:
             return CRYPT_MD_SM3;
-        case SGD_SHA1:
+        case SDFX_SHA1:
             return CRYPT_MD_SHA1;
-        case SGD_SHA224:
+        case SDFX_SHA224:
             return CRYPT_MD_SHA224;
         case SGD_SHA256:
             return CRYPT_MD_SHA256;
-        case SGD_SHA384:
+        case SDFX_SHA384:
             return CRYPT_MD_SHA384;
-        case SGD_SHA512:
+        case SDFX_SHA512:
             return CRYPT_MD_SHA512;
         default:
             return CRYPT_MD_MAX;

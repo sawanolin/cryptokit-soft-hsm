@@ -159,23 +159,29 @@ SHA256SUMS
 
 ## 已实现接口概览
 
-| 分类         | 已实现                                               |
-| ------------ | ---------------------------------------------------- |
-| 设备与会话   | Open/Close Device、Open/Close Session、GetDeviceInfo |
-| 随机数       | GenerateRandom                                       |
-| 摘要         | SM3、SHA-1/224/256/384/512；SM2`ZA` 预处理           |
-| SM2 外部运算 | 密钥生成、加解密、32 字节摘要签名和验签              |
-| RSA 运算     | 1024–2048 位密钥生成、内外部公私钥运算、IPK/EPK/ISK  |
-| 内部密钥     | SM2/RSA 公钥导出、权限获取/释放和内部密码运算        |
-| ECC 密钥协商 | 发起、响应和会话密钥生成                             |
-| 会话密钥     | SM2/RSA IPK/EPK/ISK、对称密钥包装/导入、DestroyKey   |
-| SM4/扩展     | ECB/CBC/CFB/OFB/CTR/XTS、GCM/CCM、流式 MAC/HMAC      |
-| 附录 C VPN   | IKE、IPSEC、SSL 及三个 EPK 包装接口                  |
-| 用户文件     | Create、Read、Write、Delete                          |
+| 分类         | 已实现                                                         |
+| ------------ | -------------------------------------------------------------- |
+| 设备与会话   | Open/Close Device、Open/Close Session、GetDeviceInfo           |
+| 随机数       | GenerateRandom                                                 |
+| 摘要         | 标准 SM3/SHA-256；SDFX 扩展 SHA-1/224/384/512；SM2 `ZA` 预处理 |
+| SM2 外部运算 | 密钥生成、加解密、32 字节摘要签名和验签                        |
+| RSA 运算     | 1024–2048 位密钥生成、内外部公私钥运算、IPK/EPK/ISK            |
+| 内部密钥     | SM2/RSA 公钥导出、权限获取/释放和内部密码运算                  |
+| ECC 密钥协商 | 发起、响应和会话密钥生成                                       |
+| 会话密钥     | SM2/RSA IPK/EPK/ISK、对称密钥包装/导入、DestroyKey             |
+| SM4/扩展     | ECB/CBC/CFB/OFB/CTR/XTS、GCM/CCM、流式 MAC/HMAC                |
+| 附录 C VPN   | IKE、IPSEC、SSL 及三个 EPK 包装接口                            |
+| 用户文件     | Create、Read、Write、Delete                                    |
 
 当前仅 SM9 接口未实现并返回 `SDR_NOTSUPPORT`。ECC 协商需要安全管理员
 预置内部 SM2 加密密钥；附录 C 尚未使用 GM/T 0022/0024 权威向量认证。详见
 [api-matrix.md](api-matrix.md)。
+
+公开头文件中的 SM2 签名、密钥交换、加密和 SM4-XTS 标识遵循 GM/T 0006-2023。
+SHA-1/224/384/512 教学能力使用该标准为自定义杂凑算法预留的 `0x20～0xFF`
+范围，并以 `SDFX_*` 命名；旧 `SGD_SHA*` 名称仅作为源码兼容别名，不代表
+GM/T 0006 标准算法。标准 HMAC 标识为 `SGD_SM3_HMAC` 和
+`SGD_SHA256_HMAC`。
 
 ## Web 管理
 
@@ -198,12 +204,12 @@ Web 管理端提供：
 
 权限边界：
 
-| 功能                         | 超级管理员 | 系统管理员 | 安全管理员 | 审计管理员 |
-| ---------------------------- | :--------: | :--------: | :--------: | :--------: |
-| 系统初始化、管理员管理       |     是     |     否     |     否     |     否     |
-| 系统维护、服务管理、备份恢复、设备配置 | 按矩阵授权 | 是 | 否 | 否 |
-| SM2/RSA/对称密钥             |     否     |     否     |     是     |     否     |
-| 日志配置、查询和 TXT 导出    |     否     |     否     |     否     |     是     |
+| 功能                                   | 超级管理员 | 系统管理员 | 安全管理员 | 审计管理员 |
+| -------------------------------------- | :--------: | :--------: | :--------: | :--------: |
+| 系统初始化、管理员管理                 |     是     |     否     |     否     |     否     |
+| 系统维护、服务管理、备份恢复、设备配置 | 按矩阵授权 |     是     |     否     |     否     |
+| SM2/RSA/对称密钥                       |     否     |     否     |     是     |     否     |
+| 日志配置、查询和 TXT 导出              |     否     |     否     |     否     |     是     |
 
 当前 Web 页面只显示该角色获授权的模块；服务端 API 同时强制校验角色，不能通过手工请求越权。
 
@@ -237,13 +243,13 @@ Issue；请通过仓库维护者公布的私密安全报告渠道联系。
 构建正式镜像：
 
 ```bash
-docker build --pull -t cryptokit-soft-hsm:1.0.1 .
+docker build --pull -t cryptokit-soft-hsm:lastes .
 ```
 
 运行 Web 端到端测试：
 
 ```bash
-python tests/rbac_integrity_e2e.py --base-url http://127.0.0.1:28080
+python tests/rbac_integrity_e2e.py --base-url http://127.0.0.1:18080
 # Windows：编译并运行 tests/rsa_e2e.c 和 tests/test1.c
 # reset_e2e.py 只能对隔离测试卷运行
 ```

@@ -31,7 +31,7 @@ No separate Unix administration listener or management CLI is shipped. The sourc
 | --- | --- |
 | Device/session | Open/close device, open/close session, device information |
 | Random | openHiTLS random generation |
-| Hash | SM3, SHA-1/224/256/384/512, including SM2 ZA message preprocessing |
+| Hash | Standard SM3/SHA-256 plus SDFX-extension SHA-1/224/384/512, including SM2 ZA message preprocessing |
 | SM4 | ECB, CBC, CFB, OFB, CTR, XTS, GCM, CCM, CBC-MAC, HMAC-SM3; one-shot and streaming |
 | SM2 external | Key generation, encrypt/decrypt, sign/verify |
 | SM2 internal | Sign/encryption public-key export, private access, internal sign/verify, IPK/EPK/ISK session-key wrapping |
@@ -43,6 +43,14 @@ No separate Unix administration listener or management CLI is shipped. The sourc
 | Appendix C | IKE, IPSEC, SSL and their external-SM2-public-key wrapped variants |
 
 All public GM/T 0018 declarations except SM9 have client, protocol, and daemon implementations. SM9 declarations remain ABI-visible and return `SDR_NOTSUPPORT`. The authoritative per-interface status and validation limits are maintained in [`../api-matrix.md`](../api-matrix.md).
+
+Algorithm identifiers follow GM/T 0006-2023: `SGD_SM2_1/2/3` are
+`0x00020200/0x00020400/0x00020800`, and `SGD_SM4_XTS` is `0x01000400`.
+The teaching-only SHA-1/224/384/512 algorithms use `SDFX_*` identifiers in the
+standard's custom hash range (`0x20` through `0xFF`). Deprecated `SGD_SHA*`
+spellings remain source aliases only and no longer use non-standard values
+`2/3/5/6`. HMAC accepts the standard `SGD_SM3_HMAC` and
+`SGD_SHA256_HMAC` identifiers.
 
 ## Internal keys and integrity
 

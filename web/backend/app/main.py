@@ -28,7 +28,7 @@ from pydantic import BaseModel
 
 
 PRODUCT_NAME = "CryptoKit 软件服务器密码机管理平台"
-PRODUCT_VERSION = "1.1.2"
+PRODUCT_VERSION = "1.1.3"
 DATA_ROOT = Path(os.getenv("SDFX_DATA_DIR", "/var/lib/sdfx")).resolve()
 WEB_ROOT = DATA_ROOT / "web"
 STATE_FILE = WEB_ROOT / "state.json"
@@ -590,7 +590,7 @@ class InitializeRequest(BaseModel):
     username: str
     password: str
     vendor: str = "SDFX Project"
-    device_name: str = "SDFX-1.0"
+    device_name: str = "SDFX-1.1.3"
     serial: str = "SW000001"
 
 

@@ -196,7 +196,7 @@ LONG SDF_GenerateKeyPair_ECC(HANDLE hSessionHandle, ULONG uiAlgID, ULONG uiKeyBi
 {
     SDF_CHECK_PARAM(hSessionHandle != NULL && pucPublicKey != NULL && 
                     pucPrivateKey != NULL && uiKeyBits == 256 &&
-                    (uiAlgID == SGD_SM2_1 || uiAlgID == SGD_SM2_2 ||
+                    (uiAlgID == SGD_SM2 || uiAlgID == SGD_SM2_1 || uiAlgID == SGD_SM2_2 ||
                      uiAlgID == SGD_SM2_3), SDR_INARGERR);
     
     sdfx_remote_handle_t server_session_id;

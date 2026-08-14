@@ -66,7 +66,7 @@ RUN apk add --no-cache supervisor sqlite-libs \
     && adduser -S -G sdfx sdfx
 
 LABEL org.opencontainers.image.title="CryptoKit SoftHSM" \
-    org.opencontainers.image.version="1.1.2" \
+    org.opencontainers.image.version="1.1.3" \
     org.opencontainers.image.authors="sawanolin and CryptoKit SoftHSM contributors" \
     org.opencontainers.image.source="https://github.com/sawanolin/cryptokit-soft-hsm" \
     org.opencontainers.image.url="https://hub.docker.com/r/sawanolin/cryptokit-soft-hsm" \

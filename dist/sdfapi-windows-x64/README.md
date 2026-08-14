@@ -49,7 +49,7 @@ cl /nologo /W4 /utf-8 /Iinclude your_program.c ^
 ## 已实现能力
 
 - 设备、会话、设备信息和随机数；
-- SM3、SHA-1/224/256/384/512 分段摘要及 SM2 ZA 消息预处理；
+- 标准 SM3/SHA-256、SDFX 扩展 SHA-1/224/384/512 分段摘要及 SM2 ZA 消息预处理；
 - SM4 ECB/CBC/CFB/OFB/CTR/XTS、GCM/CCM、CBC-MAC 与 HMAC-SM3；
 - 单包/流式对称、认证、MAC/HMAC 和外部密钥扩展；
 - SM2 ECC 密钥协商和附录 C IKE/IPSEC/SSL 接口；
@@ -60,13 +60,18 @@ cl /nologo /W4 /utf-8 /Iinclude your_program.c ^
 
 私钥访问控制码允许长度为 0。服务端对持久化 SM2/RSA 非对称密钥和 SM4 对称密钥记录及其索引统一执行 HMAC-SM3 完整性校验。当前仅 SM9 声明返回 `SDR_NOTSUPPORT`。
 
+SDK 算法标识遵循 GM/T 0006-2023。SM2 签名、密钥交换、加密分别使用
+`0x00020200`、`0x00020400`、`0x00020800`，SM4-XTS 使用 `0x01000400`。
+SHA-1/224/384/512 是 `SDFX_*` 教学扩展，使用标准预留的自定义杂凑标识范围；
+旧 `SGD_SHA*` 拼写仅作为源码兼容别名。
+
 ## 发布验证
 
 在仓库根目录执行：
 
 ```powershell
 .\scripts\build_windows_sdk.ps1
-.\scripts\package_windows_sdk.ps1 -Version 1.1.2 -Force
+.\scripts\package_windows_sdk.ps1 -Version 1.1.3 -Force
 ```
 
 检查脚本会核对 `sdf.h` 声明的全部 `SDF_*` 导出，并确认 DLL 不依赖 `libwinpthread-1.dll`。打包脚本只按白名单复制上述最小文件，生成 `release/sdfapi-windows-x64-版本.zip` 和新的 `SHA256SUMS`。

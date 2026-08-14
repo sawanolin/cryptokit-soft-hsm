@@ -101,7 +101,7 @@ def main():
     assert system.call("/api/service")["running"] is False
     system.call("/api/status", expected=503)
     health = system.call("/api/health")
-    assert health["status"] == "ok" and health["version"] == "1.1.2"
+    assert health["status"] == "ok" and health["version"] == "1.1.3"
     assert health["daemon"]["running"] is False
     system.call("/api/service/start", "POST", {"confirmation": "START SERVICE"})
     assert system.call("/api/service")["daemon_available"] is True
