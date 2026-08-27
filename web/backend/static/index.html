@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>CryptoKit 软件服务器密码机管理平台 1.1.3</title>
+  <title>CryptoKit 软件服务器密码机管理平台 1.1.4</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">CK</div>
-        <div><strong>CryptoKit</strong><span>软件服务器密码机 v1.1.3</span></div>
+        <div><strong>CryptoKit</strong><span>软件服务器密码机 v1.1.4</span></div>
       </div>
       <nav id="nav" hidden>
         <button data-page="administrators">管理员管理</button>
@@ -54,9 +54,10 @@
           <h2>设备初始化与超级管理员</h2>
           <label>管理员用户名<input name="username" value="admin" required minlength="3" maxlength="32"></label>
           <label>管理员密码<input name="password" type="password" required minlength="10" autocomplete="new-password"></label>
+          <p class="muted">首次创建账户时由密码服务生成固定 8 字节随机盐值；浏览器计算 SM3(口令 UTF-8 字节 || 盐值) 后提交，服务端不接收或保存明文口令。</p>
           <div class="split">
             <label>厂商标识<input name="vendor" value="SDFX Project" required maxlength="40"></label>
-            <label>设备名称<input name="device_name" value="SDFX-1.1.3" required maxlength="16"></label>
+            <label>设备名称<input name="device_name" value="SDFX-1.1.4" required maxlength="16"></label>
           </div>
           <label>设备序列号<input name="serial" value="SW000001" required maxlength="16"></label>
 
@@ -65,13 +66,27 @@
       </section>
 
       <section id="login-view" class="auth-layout compact" hidden>
-        <div class="auth-copy"><span class="tag">安全登录</span><h2>管理密码设备</h2><p>登录会话采用 HttpOnly 严格 Cookie，所有变更操作均执行 CSRF 校验并记录审计事件。</p></div>
-        <form id="login-form" class="panel form-grid">
-          <h2>管理员登录</h2>
+        <div class="auth-copy"><span class="tag">安全登录</span><h2>管理密码设备</h2></div>
+        <div class="panel auth-methods">
+        <div class="auth-tabs" role="tablist" aria-label="登录方式">
+          <button class="auth-tab active" type="button" role="tab" aria-selected="true" data-auth-tab="password">用户名+口令</button>
+          <button class="auth-tab" type="button" role="tab" aria-selected="false" data-auth-tab="ukey">用户名+口令+UKey</button>
+        </div>
+        <form id="login-form" class="form-grid auth-tab-panel" data-auth-panel="password">
+          <h2>用户名口令登录</h2>
           <label>用户名<input name="username" required autocomplete="username"></label>
           <label>密码<input name="password" type="password" required autocomplete="current-password"></label>
+          <p class="muted">口令只在当前页面中与该账户的固定盐值计算 SM3，不以明文发送。</p>
           <button class="button primary" type="submit">登录</button>
         </form>
+        <form id="ukey-login-form" class="form-grid auth-tab-panel" data-auth-panel="ukey" hidden>
+          <h2>用户名+口令+UKey</h2>
+          <label>用户名<input name="username" required autocomplete="username"></label>
+          <label>登录密码<input name="password" type="password" required autocomplete="current-password"></label>
+          <p class="muted">先在浏览器内完成固定盐值 SM3 校验，再进入本机 UKey PIN 窗口。</p>
+          <div class="form-actions"><button class="button primary" type="submit">使用 UKey 登录</button><a class="button ghost" href="/static/downloads/ukey-agent-windows-x64-1.1.4.exe" download>下载 UKey 插件</a></div>
+        </form>
+        </div>
       </section>
 
       <section id="app-view" hidden>
@@ -95,7 +110,7 @@
 
         <div id="page-administrators" class="page" hidden>
           <div class="page-actions"><div><p class="eyebrow">基于角色的访问控制</p><h2>管理员管理</h2></div><button id="open-admin-dialog" class="button primary">创建管理员</button></div>
-          <div class="panel table-wrap"><table><thead><tr><th>用户名</th><th>角色</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="admin-rows"></tbody></table></div>
+          <div class="panel table-wrap"><table><thead><tr><th>用户名</th><th>角色</th><th>状态</th><th>登录方式</th><th>UKey</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="admin-rows"></tbody></table></div>
         </div>
 
         <div id="page-service" class="page" hidden>
@@ -366,9 +381,23 @@
       <div class="dialog-head"><h2>配置管理员</h2><button type="button" class="icon-button" data-close>×</button></div>
       <input name="username" type="hidden">
       <label>角色<select name="role"><option value="system_admin">系统管理员</option><option value="security_admin">安全管理员</option><option value="audit_admin">审计管理员</option><option value="super_admin">超级管理员</option></select></label>
+      <label>登录方式<select name="login_mode"><option value="password">用户名+口令</option><option value="password_ukey">用户名+口令+UKey</option></select></label>
       <label>新登录密码（不修改则留空）<input name="password" type="password" minlength="10" autocomplete="new-password"></label>
       <label class="check"><input name="enabled" type="checkbox"> 启用账户</label>
       <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button primary" type="submit">保存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="admin-ukey-dialog">
+    <form id="admin-ukey-form" class="form-grid">
+      <div class="dialog-head"><h2>配置 UKey 身份鉴别</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <input name="username" type="hidden">
+      <p id="admin-ukey-account" class="muted"></p>
+      <label>用户签名证书（DER .cer）<input name="user_certificate" type="file" accept=".cer,.der,application/pkix-cert" required></label>
+      <label>签发 CA 证书（DER .cer）<input name="ca_certificate" type="file" accept=".cer,.der,application/pkix-cert" required></label>
+      <label class="check"><input name="enabled" type="checkbox" checked> 启用该管理员的 UKey 登录</label>
+      <pre id="admin-ukey-summary" class="output">尚未配置</pre>
+      <div class="dialog-actions"><button id="remove-admin-ukey" type="button" class="button danger" hidden>移除 UKey 配置</button><button type="button" class="button ghost" data-close>取消</button><button class="button primary" type="submit">校验并保存</button></div>
     </form>
   </dialog>
 
@@ -380,6 +409,13 @@
       <label>确认文字<input name="confirmation" required pattern="DELETE"></label>
       <div class="dialog-actions"><button type="button" class="button ghost" data-close>取消</button><button class="button danger" type="submit">删除</button></div>
     </form>
+  </dialog>
+  <dialog id="ukey-agent-dialog" class="compact-dialog">
+    <div class="form-grid">
+      <div class="dialog-head"><h2>未检测到 UKey 插件</h2><button type="button" class="icon-button" data-close>×</button></div>
+      <p class="muted">请启动当前电脑上的 CryptoKit UKey 插件，然后重新检测。尚未安装时可直接下载安装包。</p>
+      <div class="dialog-actions"><button type="button" class="button ghost" data-close>稍后处理</button><a class="button ghost" href="/static/downloads/ukey-agent-windows-x64-1.1.4.exe" download>下载插件</a><button id="retry-ukey-agent" type="button" class="button primary">我已启动，重新检测</button></div>
+    </div>
   </dialog>
   <script src="/static/app.js" defer></script>
   <script src="/static/maintenance.js" defer></script>

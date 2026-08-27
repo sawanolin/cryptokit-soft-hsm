@@ -116,7 +116,7 @@ static void admin_device_info_reset_runtime(void)
 {
     DEVICEINFO reset = {
         .IssuerName = "SDFX Project",
-        .DeviceName = "SDFX-1.1.3",
+        .DeviceName = "SDFX-1.1.4",
         .DeviceSerial = "SW000001",
         .DeviceVersion = 0x00010103,
         .StandardVersion = 0x00020023,

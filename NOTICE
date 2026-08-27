@@ -27,6 +27,10 @@ This distribution includes openHiTLS:
   Third-party notice:
     openhitls/Third_Party_Open_Source_Software_Notice
 
+The Web management image also installs cryptography (Apache-2.0 or BSD-3-Clause),
+cffi (MIT), and pycparser (BSD-3-Clause) for X.509 certificate processing.
+Their installed package metadata contains the applicable license notices.
+
 The original SDFX and openHiTLS material remains subject to its existing
 license and notices. Inclusion in this distribution does not claim ownership
 of, or remove the permissions and notices applicable to, upstream material.

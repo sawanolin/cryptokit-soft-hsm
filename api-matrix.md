@@ -13,7 +13,7 @@
 | 设备和会话 | Open/Close Device、Open/Close Session、GetDeviceInfo | 不透明句柄、远端 ID、引用计数、无效/跨会话句柄拒绝、关闭会话清理 |
 | 随机数 | `SDF_GenerateRandom` | 1–4096 字节及非法参数 |
 | 摘要及 SM2 预处理 | HashInit/Update/Final | GM/T 0006 标准 SM3/SHA-256；`SDFX_*` 扩展 SHA-1/224/384/512；`SM3 + 公钥 + 非空 ID` 计算 `ZA` 后执行 `SM3(ZA||M)`；ID 最长 8191 字节，单次 Update 最长 32 KiB |
-| SM2 外部运算 | KeyPair、Encrypt/Decrypt、Sign/Verify | 256 位；`SM2_1` 签名，`SM2_2` 协商，`SM2_3` 加密；签名输入严格为 32 字节摘要 |
+| SM2 外部运算 | KeyPair、Encrypt/Decrypt、Sign/Verify | 256 位；`SM2_1` 签名，`SM2_2` 协商，`SM2_3` 加密；Sign/Verify 直接消费调用方完成消息预处理后的 32 字节摘要，不在接口内部重复杂凑，可与 SKF `ECCSignData` 结果互操作 |
 | SM2 内部密钥 | 公钥导出、私钥权限、内部签名/验签、IPK/EPK/ISK | 签名/加密密钥分离；空口令和会话权限；禁用、损坏、无权限和错误索引拒绝 |
 | SM2 密钥协商 | 三个 ECC Agreement 接口 | 静态/临时密钥、双方 ID、64–512 位派生密钥、一次性协商句柄 |
 | RSA | 密钥生成、内外部运算、公钥导出、IPK/EPK/ISK | 1024–2048 位、索引/权限/缓冲区校验 |
@@ -38,7 +38,7 @@
 
 ## 当前验证
 
-已完成全量构建和共享库导出检查，并通过设备/会话、随机数、4096 字节摘要单包、SM2 `ZA` 标准向量、SM2 外部运算、SM4 ECB/CBC/XTS、流式 CBC、CBC-MAC、HMAC-SM3、GCM/CCM 单包和流式及篡改标签错误分支。六个附录 C 接口均已执行；EPK 输出已使用对应 SM2 私钥成功解封装。
+已完成全量构建和共享库导出检查，并通过设备/会话、随机数、4096 字节摘要单包、SM2 `ZA` 标准向量、SM2 外部运算、SM4 ECB/CBC/XTS、流式 CBC、CBC-MAC、HMAC-SM3、GCM/CCM 单包和流式及篡改标签错误分支。六个附录 C 接口均已执行；EPK 输出已使用对应 SM2 私钥成功解封装。真实 SKF UKey 的 `ECCSignData` 签名也已由软件服务器密码机完成预处理摘要比对和外部验签。
 
 算法标识按 GM/T 0006-2023 固定：`SGD_SM2=0x00020100`、签名
 `SGD_SM2_1=0x00020200`、密钥交换 `SGD_SM2_2=0x00020400`、加密

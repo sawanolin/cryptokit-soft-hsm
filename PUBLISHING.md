@@ -5,7 +5,8 @@
 1. GitHub 源码仓库：`cryptokit-soft-hsm`
 2. Docker Hub 镜像仓库：`cryptokit-soft-hsm`
 
-当前发布版本为 `1.1.3`，Git 标签为 `v1.1.3`。开始前统一核对：
+当前发布版本为 `1.1.4`，Git 标签为 `v1.1.4`。开始前统一核对：
+
 
 | 占位符                    | 替换内容                                       |
 | ------------------------- | ---------------------------------------------- |
@@ -115,6 +116,24 @@ rg -n -i --hidden `
 
 > **容器不是初始化数据边界，数据卷才是。** 删除并重新 `docker run`，如果仍挂载 `cryptokit-sdfx-data:/var/lib/sdfx`，新容器会继续读取旧卷中的管理员账号、密码摘要、设备完整性密钥和业务密钥。这不是镜像把测试口令打包进去。
 
+管理员账户只存放在卷内 `/var/lib/sdfx/web/state.json`。记录中的每个账户仅包含
+首次创建时通过 `SDF_GenerateRandom(8)` 生成且以后不再更换的固定盐值和
+`SM3(UTF8(口令) || 盐值)` 哈希。仅需重新创建 Web 用户名和口令而保留密码机
+密钥时，先备份再删除这个文件即可，无需删除整个卷：
+
+```powershell
+docker cp cryptokit-soft-hsm:/var/lib/sdfx/web/state.json .\state.json.backup
+docker exec cryptokit-soft-hsm rm -f /var/lib/sdfx/web/state.json
+docker restart cryptokit-soft-hsm
+```
+
+再次打开 Web 后会进入初始化页。`manager.db`、设备完整性密钥和业务密钥不会因
+上述操作被删除。命令中的容器名若已修改，应替换为实际名称。
+
+旧版 PBKDF2 账户摘要不能反推出本版所需的固定盐值 SM3 值，因此本次升级不做
+账户口令自动迁移。保留原数据卷升级时，应按上面的方式备份并删除
+`/var/lib/sdfx/web/state.json`，再从 Web 初始化页重建管理员；不要删除整个卷。
+
 发布验收建议保留日常卷，并在下文“启动隔离测试容器”步骤中使用明确的新卷 `cryptokit-release-test-data`。开始前只读核对日常资源，不要删除：
 
 ```powershell
@@ -149,7 +168,7 @@ docker compose down --volumes --remove-orphans
 ```powershell
 docker build --pull --platform linux/amd64 `
   --no-cache `
-  -t cryptokit-soft-hsm:1.1.3 .
+  -t cryptokit-soft-hsm:1.1.4 .
 ```
 
 使用刚构建的镜像强制创建新容器：
@@ -211,7 +230,7 @@ docker run -d `
   -p 127.0.0.1:18080:18080 `
   -v cryptokit-release-test-data:/var/lib/sdfx `
   --security-opt no-new-privileges:true `
-  cryptokit-soft-hsm:1.1.3
+  cryptokit-soft-hsm:1.1.4
 ```
 
 等待健康：
@@ -296,7 +315,7 @@ try {
 确认镜像平台：
 
 ```powershell
-docker image inspect cryptokit-soft-hsm:1.1.3 `
+docker image inspect cryptokit-soft-hsm:1.1.4 `
   --format '{{.Os}}/{{.Architecture}}'
 ```
 
@@ -436,7 +455,7 @@ cryptography
 windows-sdk
 ```
 
-## 六、创建 GitHub v1.1.3 Release
+## 六、创建 GitHub v1.1.4 Release
 
 ### 1. 打包最小化 Windows SDK
 
@@ -444,42 +463,85 @@ windows-sdk
 
 ```powershell
 .\scripts\build_windows_sdk.ps1
-.\scripts\package_windows_sdk.ps1 -Version 1.1.3 -Force
+.\scripts\package_windows_sdk.ps1 -Version 1.1.4 -Force
 ```
 
 `build_windows_sdk.ps1` 会验证 94 个公开导出及 DLL 依赖并更新 `dist`；`package_windows_sdk.ps1` 只复制主 DLL、MSVC/MinGW 导入库、3 个公开头文件、1 份配置模板、许可证和 README，并重新生成包内 `SHA256SUMS`。测试 EXE、OBJ、示例源码、CMake/pkg-config 文件、内部头文件以及重复 INI 均不会进入 ZIP。输出为：
 
 ```text
-release/sdfapi-windows-x64-1.1.3.zip
+release/sdfapi-windows-x64-1.1.4.zip
 ```
 
-1.1.3 修正了 GM/T 0006-2023 算法标识。发布时必须同时重建 Docker 镜像和
-Windows SDK，不能把旧版 `sdfapi_x64.dll` 或旧 `sdf_types.h` 与新版服务端
-混用。打包前确认公共头文件中 SM2 签名/协商/加密分别为
+1.1.4 在保留 GM/T 0006-2023 算法标识修正的基础上增加账户级两种登录方式、
+本地浏览器 PIN 桥接窗口和登录页 Agent 下载。发布时必须同时重建 Docker 镜像、
+Windows SDK 和 UKey Agent，不能把旧版 `sdfapi_x64.dll`、旧 `sdf_types.h` 或
+旧 Agent 与新版服务端混用。打包前确认公共头文件中 SM2 签名/协商/加密分别为
 `0x00020200/0x00020400/0x00020800`，SM4-XTS 为 `0x01000400`，并确认
 `dist` 头文件与 `sdfx/include/sdf_types.h` 的 SHA-256 完全一致。
 
 脚本最后会输出 ZIP 的 SHA-256，把该值记录到 Release Notes。
 
-### 2. 创建带注释标签
+### 2. 构建单文件 Windows UKey Agent
+
+UKey Agent 是本仓库的一部分，但不进入 Linux Docker 镜像。发布机需安装
+Visual Studio 2022“使用 C++ 的桌面开发”，然后从项目根目录执行：
 
 ```powershell
-git tag -a v1.1.3 -m 'CryptoKit SoftHSM 1.1.3'
-git push origin v1.1.3
+.\ukey-agent\build.ps1 -Configuration Release
+
+New-Item -ItemType Directory -Force -Path '.\release' | Out-Null
+Copy-Item -LiteralPath '.\ukey-agent\dist\ukey-agent.exe' `
+  -Destination '.\release\ukey-agent-windows-x64-1.1.4.exe' -Force
+Get-FileHash -Algorithm SHA256 `
+  '.\release\ukey-agent-windows-x64-1.1.4.exe'
 ```
 
-### 3. 创建 Release
+这个单一 EXE 内嵌 x86/x64 helper、浏览器调用脚本、PIN 桥接页和 logo，可调用 32 位或
+64 位厂商 SKF DLL。发布前在一台 Windows 测试机上配置厂商 DLL，至少验证：
+
+- 健康检查 `http://127.0.0.1:18088/v1/health`；
+- PIN 桥接页 `http://127.0.0.1:18088/bridge/pin`；
+- 自动或指定设备、应用和容器；
+- 查看并导出签名/加密证书；
+- Web 绑定用户证书与 CA 证书；
+- 一次完整的 UKey 挑战登录；
+- 逐一验证“用户名+口令”“用户名+口令+UKey”两种账户模式，确认组合
+  模式不能绕过服务器口令或 UKey 因子；
+- `tests/ukey_auth_integration.py` 中证书匹配、摘要一致、证书链验签和 UKey 签名验签均为 `true`。
+- `tests/ukey_login_modes_e2e.py` 输出的两个登录模式结果均为 `true`。
+
+验收时从登录页下载 Agent，确认未启动时出现“启动、重新检测或下载”对话框；
+启动后确认主页面弹出小型本地 PIN 窗口，完成签名后自动返回管理页。分别使用
+HTTP 和 HTTPS 管理入口验证同一流程；不得把 Agent 改为监听 `0.0.0.0`。
+
+真实设备测试脚本只在显式设置 `UKEY_TEST_PIN` 和 `UKEY_CERT_DIR` 时运行。
+其中证书目录应包含 `ukey-sign-certificate.cer` 与 `root-ca.cer`。测试结束后
+立即从当前 PowerShell 会话删除这两个环境变量；不要把 PIN、厂商 DLL 或证书
+的本机绝对路径写进脚本、文档或提交记录。
+
+厂商 SKF DLL 和测试 PIN 不得放入源码、Release 附件、Docker 构建上下文或
+日志。Release 只上传 `ukey-agent-windows-x64-1.1.4.exe`，并记录 SHA-256。
+
+### 3. 创建带注释标签
+
+```powershell
+git tag -a v1.1.4 -m 'CryptoKit SoftHSM 1.1.4'
+git push origin v1.1.4
+```
+
+### 4. 创建 Release
 
 使用 GitHub CLI：
 
 ```powershell
-gh release create v1.1.3 `
-  '.\release\sdfapi-windows-x64-1.1.3.zip' `
-  --title 'CryptoKit SoftHSM 1.1.3' `
+gh release create v1.1.4 `
+  '.\release\sdfapi-windows-x64-1.1.4.zip' `
+  '.\release\ukey-agent-windows-x64-1.1.4.exe' `
+  --title 'CryptoKit SoftHSM 1.1.4' `
   --generate-notes
 ```
 
-也可以在 GitHub 的 Releases 页面选择 `v1.1.3`，填写说明并上传 ZIP。
+也可以在 GitHub 的 Releases 页面选择 `v1.1.4`，填写说明并上传 SDK ZIP 和 UKey Agent EXE。
 GitHub Release 自动附带该标签对应源码的 ZIP 和 tar.gz。
 
 Release Notes 至少说明：
@@ -492,6 +554,7 @@ Release Notes 至少说明：
 - SM9 接口保留导出并返回 `SDR_NOTSUPPORT`；
 - TCP/HTTP、备份加密和认证资质边界；
 - Windows SDK ZIP 的 SHA-256。
+- UKey Agent EXE 的 SHA-256，以及 32/64 位厂商 SKF DLL 兼容和真实 UKey 登录测试结果。
 
 ## 七、创建 Docker Hub 仓库
 
@@ -524,26 +587,26 @@ docker login --username YOUR_DOCKERHUB_USERNAME
 
 ### 2. 从发布提交重新构建
 
-确保当前提交就是 `v1.1.3`：
+确保当前提交就是 `v1.1.4`：
 
 ```powershell
 git status --short
 git rev-parse HEAD
-git rev-list -n 1 v1.1.3
+git rev-list -n 1 v1.1.4
 ```
 
 后两个提交 ID 应一致。然后构建两个标签：
 
 ```powershell
 docker build --platform linux/amd64 `
-  -t sawanolin/cryptokit-soft-hsm:1.1.3 `
+  -t sawanolin/cryptokit-soft-hsm:1.1.4 `
   -t sawanolin/cryptokit-soft-hsm:latest .
 ```
 
 ### 3. 推送固定版本和 latest
 
 ```powershell
-docker push sawanolin/cryptokit-soft-hsm:1.1.3
+docker push sawanolin/cryptokit-soft-hsm:1.1.4
 docker push sawanolin/cryptokit-soft-hsm:latest
 ```
 
@@ -553,7 +616,7 @@ docker push sawanolin/cryptokit-soft-hsm:latest
 
 ```powershell
 docker buildx imagetools inspect `
-  sawanolin/cryptokit-soft-hsm:1.1.3
+  sawanolin/cryptokit-soft-hsm:1.1.4
 ```
 
 把 Docker Hub 返回的 `sha256:` digest 记录到 GitHub Release Notes。
@@ -565,14 +628,14 @@ docker buildx imagetools inspect `
 使用一个没有本地同名标签的环境最好。至少执行：
 
 ```powershell
-docker pull YOUR_DOCKERHUB_USERNAME/cryptokit-soft-hsm:1.1.3
+docker pull YOUR_DOCKERHUB_USERNAME/cryptokit-soft-hsm:1.1.4
 
 docker run -d `
   --name cryptokit-hub-test `
   -p 0.0.0.0:18081:18081 `
   -p 0.0.0.0:18080:18080 `
   -v cryptokit-hub-test-data:/var/lib/sdfx `
-  YOUR_DOCKERHUB_USERNAME/cryptokit-soft-hsm:1.1.3
+  YOUR_DOCKERHUB_USERNAME/cryptokit-soft-hsm:1.1.4
 ```
 
 检查健康和 Web：
@@ -608,21 +671,22 @@ Docker Hub：
 
 建议建立一一对应关系：
 
+
 | Git          | Docker Hub | GitHub Release            |
 | ------------ | ---------- | ------------------------- |
-| `v1.1.3`     | `:1.1.3`   | `CryptoKit SoftHSM 1.1.3` |
+| `v1.1.4`     | `:1.1.4`   | `CryptoKit SoftHSM 1.1.4` |
 | 最新稳定标签 | `:latest`  | 最新非预发布 Release      |
 
 ## 十一、以后发布新版本
 
-以 `1.1.3` 为例：
+以 `1.1.4` 为例：
 
 1. 更新版本号、`api-matrix.md` 和变更说明；
 2. 从干净数据卷完成 Linux、Web 和 Windows 全部测试；
-3. 提交并创建 `v1.1.3` 标签；
+3. 提交并创建 `v1.1.4` 标签；
 4. 创建 GitHub Release 和 Windows SDK ZIP；
-5. 从同一标签构建 `:1.1.3`；
-6. 推送 `:1.1.3`；
+5. 从同一标签构建 `:1.1.4`；
+6. 推送 `:1.1.4`；
 7. 最终验收通过后再更新 `:latest`；
 8. 在 Release Notes 记录 registry digest；
 9. 不覆盖或删除已经发布的固定版本标签。

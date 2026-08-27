@@ -19,7 +19,7 @@
 /* Device Information */
 static DEVICEINFO g_device_info = {
     .IssuerName = "SDFX Project",
-    .DeviceName = "SDFX-1.1.3",
+    .DeviceName = "SDFX-1.1.4",
     .DeviceSerial = "SW000001",
     .DeviceVersion = 0x00010103,
     .StandardVersion = 0x00020023,

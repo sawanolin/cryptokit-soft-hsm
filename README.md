@@ -7,11 +7,12 @@
 
 CryptoKit SoftHSM 是一套基于 SDFX 和 openHiTLS 的 GM/T 0018-2023
 SDF 接口兼容软件密码设备模拟器。项目提供 Linux Docker 服务端、内置
-Web 管理端，以及通过 TCP 调用服务端的 Windows x64 SDF C SDK。
+Web 管理端、通过 TCP 调用服务端的 Windows x64 SDF C SDK，以及用于浏览器
+UKey 身份鉴别的 Windows 单文件插件。
 
 > 本项目用于学习、开发、教学、接口联调和密码应用测试，不是经过商用密码检测认证的硬件服务器密码机，不应直接用于生产密钥托管或合规场景。
 > 演示地址 WEB：http://47.99.222.28:18080 TCP：47.99.222.28:18081
-> 超级管理员：superadmin 系统管理员：sysadmin 安全管理员 secadmin 审计管理员 audadmin
+> 超级管理员：superadmin 系统管理员：sysadmin 安全管理员 secadmin 审计管理员 audadmin，系统管理员现已配置测试ukey
 > 口令均为：Aa12345678
 
 ## 主要能力
@@ -26,6 +27,8 @@ Web 管理端，以及通过 TCP 调用服务端的 Windows x64 SDF C SDK。
 - 附录 C IKE、IPSEC、SSL 普通及 EPK 包装接口；
 - SDF 用户文件创建、偏移读写与删除；
 - Web 四角色权限管理、设备信息、SM2/RSA/对称密钥生命周期、会话管理和审计；
+- 超级管理员为账户绑定 SM2 用户签名证书与 CA 信任锚，支持 UKey 挑战响应登录；
+- 单文件 Windows UKey Agent 同时兼容 x86/x64 厂商 SKF DLL，固定监听本机 `127.0.0.1:18088`；
 - Web 随机数、SM3、SM4、SM2、RSA 在线密码自检；
 - 经过格式校验的备份、恢复、上传、下载和完全重置；
 - 最小化 Windows x64 SDK：单一运行时 DLL、MSVC/MinGW 导入库、公开头文件和单一配置模板。
@@ -116,12 +119,17 @@ docker compose down -v
 不会自动生成任何业务密钥。随后由超级管理员创建系统、安全、审计管理员，
 再由安全管理员生成 SM2/RSA 签名密钥、加密密钥和对称密钥。
 
-项目没有默认管理员密码。管理员密码以 PBKDF2-SHA256 记录保存；内部私钥
-使用 SM4-CTR 加密后持久化。私钥访问控制码允许留空：留空时不要求应用调用方
+项目没有默认管理员密码。每个管理员首次创建时，Web 后端通过
+`SDF_GenerateRandom` 生成一次且仅属于该账户的固定 8 字节盐值；以后修改口令
+仍复用该账户的原盐值，不再次生成。登录页面先请求
+已保存的盐值，在浏览器内计算 `SM3(UTF8(口令) || 盐值)`，随后只提交 32 字节
+哈希；服务端的 `state.json` 只保存 Base64 盐值和 Base64 哈希，不保存明文口令。
+内部私钥使用 SM4-CTR 加密后持久化。私钥访问控制码允许留空：留空时不要求应用调用方
 输入口令，私钥仍由设备密钥派生的加密密钥保护。命名数据卷会保留管理员账户、
 口令摘要和全部设备状态；要创建全新设备必须使用新的空卷或明确删除旧卷。
 
 ## 端口与持久化
+
 
 | 项目     |          默认值 | 用途                                                 |
 | -------- | --------------: | ---------------------------------------------------- |
@@ -159,19 +167,20 @@ SHA256SUMS
 
 ## 已实现接口概览
 
-| 分类         | 已实现                                                         |
-| ------------ | -------------------------------------------------------------- |
-| 设备与会话   | Open/Close Device、Open/Close Session、GetDeviceInfo           |
-| 随机数       | GenerateRandom                                                 |
-| 摘要         | 标准 SM3/SHA-256；SDFX 扩展 SHA-1/224/384/512；SM2 `ZA` 预处理 |
-| SM2 外部运算 | 密钥生成、加解密、32 字节摘要签名和验签                        |
-| RSA 运算     | 1024–2048 位密钥生成、内外部公私钥运算、IPK/EPK/ISK            |
-| 内部密钥     | SM2/RSA 公钥导出、权限获取/释放和内部密码运算                  |
-| ECC 密钥协商 | 发起、响应和会话密钥生成                                       |
-| 会话密钥     | SM2/RSA IPK/EPK/ISK、对称密钥包装/导入、DestroyKey             |
-| SM4/扩展     | ECB/CBC/CFB/OFB/CTR/XTS、GCM/CCM、流式 MAC/HMAC                |
-| 附录 C VPN   | IKE、IPSEC、SSL 及三个 EPK 包装接口                            |
-| 用户文件     | Create、Read、Write、Delete                                    |
+
+| 分类         | 已实现                                                        |
+| ------------ | ------------------------------------------------------------- |
+| 设备与会话   | Open/Close Device、Open/Close Session、GetDeviceInfo          |
+| 随机数       | GenerateRandom                                                |
+| 摘要         | 标准 SM3/SHA-256；SDFX 扩展 SHA-1/224/384/512；SM2`ZA` 预处理 |
+| SM2 外部运算 | 密钥生成、加解密、32 字节摘要签名和验签                       |
+| RSA 运算     | 1024–2048 位密钥生成、内外部公私钥运算、IPK/EPK/ISK          |
+| 内部密钥     | SM2/RSA 公钥导出、权限获取/释放和内部密码运算                 |
+| ECC 密钥协商 | 发起、响应和会话密钥生成                                      |
+| 会话密钥     | SM2/RSA IPK/EPK/ISK、对称密钥包装/导入、DestroyKey            |
+| SM4/扩展     | ECB/CBC/CFB/OFB/CTR/XTS、GCM/CCM、流式 MAC/HMAC               |
+| 附录 C VPN   | IKE、IPSEC、SSL 及三个 EPK 包装接口                           |
+| 用户文件     | Create、Read、Write、Delete                                   |
 
 当前仅 SM9 接口未实现并返回 `SDR_NOTSUPPORT`。ECC 协商需要安全管理员
 预置内部 SM2 加密密钥；附录 C 尚未使用 GM/T 0022/0024 权威向量认证。详见
@@ -201,8 +210,10 @@ Web 管理端提供：
 - 带级别、分类、请求号、来源地址和详情的管理审计；支持时间段、级别、类型、结果、管理员、操作、目标、来源、请求号、方法、路径、关键字、排序及条数的组合筛选，并按自选字段导出 TXT、CSV 或 JSONL；
 - SDF 状态码失败和密码服务连接失败统一记录为 `ERROR / sdf`；
 - 备份、恢复、上传、下载和完全重置。
+- 密码登录与 UKey 身份鉴别登录；UKey 登录对用户证书、CA 证书、有效期、SM2 算法、证书签名链、BasicConstraints、KeyUsage、AKI/SKI 和绑定证书指纹进行复核；
 
 权限边界：
+
 
 | 功能                                   | 超级管理员 | 系统管理员 | 安全管理员 | 审计管理员 |
 | -------------------------------------- | :--------: | :--------: | :--------: | :--------: |
@@ -212,6 +223,30 @@ Web 管理端提供：
 | 日志配置、查询和 TXT 导出              |     否     |     否     |     否     |     是     |
 
 当前 Web 页面只显示该角色获授权的模块；服务端 API 同时强制校验角色，不能通过手工请求越权。
+
+### UKey 身份鉴别
+
+超级管理员在“管理员管理”中为指定账户上传用户签名证书和签发 CA 证书。
+上传的 CA 可以是根 CA，也可以是管理员确认可信的中间 CA，并作为该用户的
+信任锚。登录页输入用户名和服务器口令后，会打开由本机 UKey Agent 提供的
+小型浏览器 PIN 窗口。PIN 只存在于该回环窗口和 Agent 内存中，不进入管理页面
+或软件服务器密码机。
+
+软件密码机通过 `SDF_GenerateRandom` 生成 32 字节一次性随机数，并签入用途、
+用户名、会话号、签发时间和 60 秒失效时间。Agent 使用固定 SM2 ID
+`1234567812345678` 完成 `SKF_DigestInit/Update/Final` 与
+`SKF_ECCSignData`，同时返回签名证书。服务端重新计算摘要、比对绑定证书、
+校验证书属性和链，再由 `SDF_ExternalVerify_ECC` 验证 64 字节 `r||s` 签名。
+挑战只允许成功使用一次。
+
+超级管理员可为每个账户选择“用户名+口令”或“用户名+口令+UKey”两种
+方式。启用账户ukey后须在配置里选择登陆方式；
+
+`127.0.0.1:18088` 始终表示打开管理网页的客户电脑，主页面不再跨来源 `fetch` 回环接口，而是打开本地 PIN 窗口并通过 `postMessage` 交换
+非秘密挑战和签名结果，可用于 HTTP 或 HTTPS 管理页面。登录页提供 Agent 下载
+按钮；未检测到 Agent 时会提示用户启动、重新检测或下载插件。
+
+Agent 源码、构建和厂商 DLL 配置说明见 [ukey-agent/README.md](ukey-agent/README.md)。
 
 停止或重启密码服务会断开当前 SDF TCP 连接和活动会话，但不会删除
 `/var/lib/sdfx` 中的密钥、账号与配置。详细设计和操作说明见
@@ -230,6 +265,7 @@ Web 管理端提供：
 
 - 业务 TCP 通道当前没有 TLS 或双向认证；
 - Web 管理端默认使用 HTTP；
+- 固定盐值哈希避免传输和保存明文口令，但该哈希本身可作为登录凭据重放，部署时仍应使用 HTTPS；
 - 应保持端口只绑定本机，或置于受控网络和 HTTPS 反向代理之后；
 - 不要在镜像、Compose 文件、源码或 Git 历史中写入管理员口令和令牌；
 - 本项目没有商用密码产品认证、FIPS 认证或硬件防拆能力；
@@ -263,6 +299,8 @@ python tests/rbac_integrity_e2e.py --base-url http://127.0.0.1:18080
 - 随机数/SM3/SM4/SM2/RSA 自检、备份恢复与完全重置；
 - Windows x64 DLL 的 94 个公开 SDF 导出；
 - Windows `test1` 的 SM2 封装回环及 RSA 内外部/会话密钥封装真实连接。
+- `tests/ukey_auth_integration.py` 使用真实 UKey 校验证书匹配、SM2 预处理摘要、证书链以及 UKey 签名与 SDF 验签互操作（仅在显式提供 `UKEY_TEST_PIN` 和证书目录 `UKEY_CERT_DIR` 时运行）。
+- `tests/ukey_login_modes_e2e.py` 在临时 Web 容器中验证两种登录方式，并确认组合方式不能绕过口令或 UKey 因子。
 
 ## 项目结构
 
@@ -273,6 +311,7 @@ python tests/rbac_integrity_e2e.py --base-url http://127.0.0.1:18080
 ├── openhitls/                  # openHiTLS 上游源码
 ├── sdfx/                       # SDF SDK、服务端、协议和测试
 ├── web/                        # Web 后端和静态前端
+├── ukey-agent/                 # Windows 单文件 UKey 托盘 Agent（x86/x64 SKF DLL）
 ├── server/                     # 容器启动、健康检查和进程管理
 ├── tests/                      # Web/管理端到端测试
 ├── dist/sdfapi-windows-x64/    # Windows x64 SDK 交付包
@@ -285,6 +324,7 @@ python tests/rbac_integrity_e2e.py --base-url http://127.0.0.1:18080
 - [项目验收文档（含用户手册与初步设计）](项目验收文档.md)
 - [GM/T 0018-2023 API 实现矩阵](api-matrix.md)
 - [Web 管理端说明](WEB-MANAGEMENT.md)
+- [UKey Agent 与浏览器身份鉴别](ukey-agent/README.md)
 - [Windows x64 SDK 说明](dist/sdfapi-windows-x64/README.md)
 - [Docker Hub 仓库 README](DOCKERHUB_README.md)
 - [GitHub 与 Docker Hub 发布指南](PUBLISHING.md)

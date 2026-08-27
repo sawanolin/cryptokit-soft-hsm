@@ -26,9 +26,18 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .ukey_auth import (
+    UKeyCertificateError,
+    base64url_decode,
+    base64url_encode,
+    decode_certificate,
+    sm2_public_point,
+    validate_certificate_binding,
+)
+
 
 PRODUCT_NAME = "CryptoKit 软件服务器密码机管理平台"
-PRODUCT_VERSION = "1.1.3"
+PRODUCT_VERSION = "1.1.4"
 DATA_ROOT = Path(os.getenv("SDFX_DATA_DIR", "/var/lib/sdfx")).resolve()
 WEB_ROOT = DATA_ROOT / "web"
 STATE_FILE = WEB_ROOT / "state.json"
@@ -41,6 +50,12 @@ STATIC_ROOT = Path(__file__).resolve().parent.parent / "static"
 SESSION_TTL = int(os.getenv("SDFX_WEB_SESSION_TTL", "1800"))
 COOKIE_SECURE = os.getenv("SDFX_WEB_SECURE_COOKIE", "false").lower() == "true"
 COOKIE_NAME = "sdfx_manager_session"
+UKEY_FLOW_COOKIE_NAME = "sdfx_ukey_flow"
+UKEY_CHALLENGE_TTL = 60
+UKEY_SM2_ID = b"1234567812345678"
+PASSWORD_SALT_BYTES = 8
+PASSWORD_HASH_BYTES = 32
+PASSWORD_SALT_TICKET_TTL = 300
 
 MAGIC = 0x53444658
 VERSION = 0x00020000
@@ -51,6 +66,10 @@ CMD_CLOSE_DEVICE = 0x0002
 CMD_OPEN_SESSION = 0x0003
 CMD_CLOSE_SESSION = 0x0004
 CMD_GENERATE_RANDOM = 0x0006
+CMD_HASH_INIT = 0x0010
+CMD_HASH_UPDATE = 0x0011
+CMD_HASH_FINAL = 0x0012
+CMD_EXTERNAL_VERIFY_ECC = 0x0036
 CMD_ADMIN_STATUS = 0x0060
 CMD_ADMIN_KEY_LIST = 0x0061
 CMD_ADMIN_KEY_CREATE = 0x0062
@@ -89,6 +108,11 @@ CMD_ADMIN_KEK_VERIFY = 0x008C
 
 KEY_TYPES = {"sign": 1, "enc": 2}
 ROLES = {"super_admin", "system_admin", "security_admin", "audit_admin"}
+LOGIN_MODES = {"password", "password_ukey"}
+LOGIN_MODE_LABELS = {
+    "password": "用户名+口令",
+    "password_ukey": "用户名+口令+UKey",
+}
 ROLE_LABELS = {
     "super_admin": "超级管理员",
     "system_admin": "系统管理员",
@@ -105,6 +129,9 @@ USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
 BACKUP_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 login_lock = threading.Lock()
 login_failures: dict[str, list[float]] = {}
+state_lock = threading.RLock()
+password_salt_lock = threading.Lock()
+password_salt_tickets: dict[str, dict[str, Any]] = {}
 maintenance_lock = threading.Lock()
 maintenance_active = threading.Event()
 service_control_lock = threading.Lock()
@@ -233,6 +260,85 @@ class ProtocolClient:
                 self.send(CMD_CLOSE_DEVICE, struct.pack("!Q", device))
             except Exception:
                 pass
+
+    @staticmethod
+    def _ecc_public_key(x: bytes, y: bytes) -> bytes:
+        if len(x) != 32 or len(y) != 32:
+            raise ValueError("SM2 公钥坐标必须为 32 字节")
+        return struct.pack("=I", 256) + (b"\0" * 32) + x + (b"\0" * 32) + y
+
+    def _open_crypto_session(self) -> tuple[int, int]:
+        device_payload = self.send(CMD_OPEN_DEVICE, struct.pack("!I16s", 0, b""))
+        if len(device_payload) != 8:
+            raise ConnectionError("打开设备响应无效")
+        device = struct.unpack("!Q", device_payload)[0]
+        try:
+            session_payload = self.send(CMD_OPEN_SESSION, struct.pack("!Q", device))
+            if len(session_payload) != 8:
+                raise ConnectionError("打开会话响应无效")
+            return device, struct.unpack("!Q", session_payload)[0]
+        except Exception:
+            try:
+                self.send(CMD_CLOSE_DEVICE, struct.pack("!Q", device))
+            except Exception:
+                pass
+            raise
+
+    def _close_crypto_session(self, device: int, session: int) -> None:
+        try:
+            self.send(CMD_CLOSE_SESSION, struct.pack("!Q", session))
+        finally:
+            self.send(CMD_CLOSE_DEVICE, struct.pack("!Q", device))
+
+    def sm2_digest(self, x: bytes, y: bytes, message: bytes,
+                   identity: bytes = UKEY_SM2_ID) -> bytes:
+        if not message or len(message) > 32768:
+            raise ValueError("SM2 消息长度必须为 1–32768 字节")
+        public_key = self._ecc_public_key(x, y)
+        device, session = self._open_crypto_session()
+        try:
+            self.send(
+                CMD_HASH_INIT,
+                struct.pack("!QI", session, 1) + public_key
+                + struct.pack("!I", len(identity)) + identity,
+            )
+            self.send(
+                CMD_HASH_UPDATE,
+                struct.pack("!QI", session, len(message)) + message,
+            )
+            payload = self.send(CMD_HASH_FINAL, struct.pack("!Q", session))
+            if len(payload) < 4:
+                raise ConnectionError("SM2 摘要响应无效")
+            length = struct.unpack("!I", payload[:4])[0]
+            if length != 32 or len(payload) < 4 + length:
+                raise ConnectionError("SM2 摘要响应长度无效")
+            return payload[4:4 + length]
+        finally:
+            self._close_crypto_session(device, session)
+
+    def sm2_verify_digest(self, x: bytes, y: bytes, digest: bytes,
+                          signature: bytes) -> bool:
+        if len(digest) != 32 or len(signature) != 64:
+            return False
+        public_key = self._ecc_public_key(x, y)
+        device, session = self._open_crypto_session()
+        try:
+            payload = self.send(
+                CMD_EXTERNAL_VERIFY_ECC,
+                struct.pack("!QI", session, 0x00020200) + public_key
+                + struct.pack("!II", len(digest), len(signature))
+                + digest + signature,
+            )
+            if len(payload) != 4:
+                raise ConnectionError("SM2 验签响应无效")
+            return struct.unpack("!I", payload)[0] == 0
+        finally:
+            self._close_crypto_session(device, session)
+
+    def sm2_message_verify(self, x: bytes, y: bytes, message: bytes,
+                           signature: bytes) -> bool:
+        digest = self.sm2_digest(x, y, message, UKEY_SM2_ID)
+        return self.sm2_verify_digest(x, y, digest, signature)
 
 
 protocol = ProtocolClient()
@@ -366,33 +472,123 @@ def load_state() -> dict[str, Any] | None:
                 }
                 state["version"] = 2
                 atomic_json_write(STATE_FILE, state)
+        migrated_login_mode = False
+        users = state.get("users")
+        if isinstance(users, dict):
+            for user in users.values():
+                if isinstance(user, dict) and user.get("login_mode") == "ukey_only":
+                    user["login_mode"] = "password"
+                    migrated_login_mode = True
+        if migrated_login_mode:
+            atomic_json_write(STATE_FILE, state)
         return state
     except FileNotFoundError:
         return None
 
 
-def password_record(password: str) -> dict[str, Any]:
-    salt = secrets.token_bytes(16)
-    rounds = 600_000
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, rounds)
+def decode_password_hash(value: str) -> bytes:
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (ValueError, TypeError) as error:
+        raise HTTPException(422, "口令 SM3 哈希格式无效") from error
+    if len(decoded) != PASSWORD_HASH_BYTES:
+        raise HTTPException(422, "口令 SM3 哈希必须为 32 字节")
+    return decoded
+
+
+def password_record_values(record: dict[str, Any]) -> tuple[bytes, bytes] | None:
+    try:
+        salt = base64.b64decode(record["salt"], validate=True)
+        expected = base64.b64decode(record["hash"], validate=True)
+        if len(salt) != PASSWORD_SALT_BYTES or len(expected) != PASSWORD_HASH_BYTES:
+            return None
+        return salt, expected
+    except (KeyError, ValueError, TypeError):
+        return None
+
+
+def issue_password_salt(
+    username: str, issued_by: str, *, preserve_existing: bool = False
+) -> dict[str, str | int]:
+    now = int(time.time())
+    state = load_state() or {}
+    used_salts: set[bytes] = set()
+    existing_salt: bytes | None = None
+    users = state.get("users", {})
+    if isinstance(users, dict):
+        for stored_username, user in users.items():
+            if isinstance(user, dict):
+                values = password_record_values(user.get("password", {}))
+                if values is not None:
+                    used_salts.add(values[0])
+                    if preserve_existing and stored_username == username:
+                        existing_salt = values[0]
+    with password_salt_lock:
+        expired = [key for key, value in password_salt_tickets.items()
+                   if int(value["expires_at"]) < now]
+        for key in expired:
+            password_salt_tickets.pop(key, None)
+        used_salts.update(value["salt"] for value in password_salt_tickets.values())
+        salt = existing_salt or b""
+        if existing_salt is None:
+            for _ in range(16):
+                candidate = protocol.random(PASSWORD_SALT_BYTES)
+                if candidate not in used_salts:
+                    salt = candidate
+                    break
+        if len(salt) != PASSWORD_SALT_BYTES:
+            raise HTTPException(503, "无法生成唯一的账户口令盐值")
+        ticket_id = secrets.token_urlsafe(24)
+        expires_at = now + PASSWORD_SALT_TICKET_TTL
+        password_salt_tickets[ticket_id] = {
+            "username": username,
+            "issued_by": issued_by,
+            "salt": salt,
+            "expires_at": expires_at,
+        }
     return {
-        "algorithm": "pbkdf2-sha256",
-        "rounds": rounds,
-        "salt": base64.b64encode(salt).decode(),
-        "digest": base64.b64encode(digest).decode(),
+        "ticket_id": ticket_id,
+        "salt_base64": base64.b64encode(salt).decode("ascii"),
+        "expires_at": expires_at,
     }
 
 
-def verify_password(password: str, record: dict[str, Any]) -> bool:
-    try:
-        salt = base64.b64decode(record["salt"], validate=True)
-        expected = base64.b64decode(record["digest"], validate=True)
-        actual = hashlib.pbkdf2_hmac(
-            "sha256", password.encode(), salt, int(record["rounds"])
-        )
-        return hmac.compare_digest(actual, expected)
-    except (KeyError, ValueError, TypeError):
+def consume_password_salt(ticket_id: str, username: str, issued_by: str) -> bytes:
+    now = int(time.time())
+    with password_salt_lock:
+        ticket = password_salt_tickets.pop(ticket_id, None)
+    if (
+        not isinstance(ticket, dict)
+        or ticket.get("username") != username
+        or ticket.get("issued_by") != issued_by
+        or int(ticket.get("expires_at", 0)) < now
+        or not isinstance(ticket.get("salt"), bytes)
+        or len(ticket["salt"]) != PASSWORD_SALT_BYTES
+    ):
+        raise HTTPException(409, "账户口令盐值凭据无效或已过期，请重新提交")
+    return ticket["salt"]
+
+
+def password_record(material: "PasswordHashInput", username: str, issued_by: str) -> dict[str, str]:
+    if not material.ticket_id:
+        raise HTTPException(422, "创建或修改口令时缺少盐值凭据")
+    salt = consume_password_salt(material.ticket_id, username, issued_by)
+    digest = decode_password_hash(material.hash_base64)
+    return {
+        "salt": base64.b64encode(salt).decode("ascii"),
+        "hash": base64.b64encode(digest).decode("ascii"),
+    }
+
+
+def verify_password(material: "PasswordHashInput", record: dict[str, Any]) -> bool:
+    values = password_record_values(record)
+    if values is None:
         return False
+    try:
+        actual = decode_password_hash(material.hash_base64)
+    except HTTPException:
+        return False
+    return hmac.compare_digest(actual, values[1])
 
 
 def db() -> sqlite3.Connection:
@@ -559,6 +755,19 @@ def initialize_storage() -> None:
         )
         connection.execute(
             """
+            CREATE TABLE IF NOT EXISTS ukey_challenges (
+                challenge_id TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                flow_hash TEXT NOT NULL,
+                message BLOB NOT NULL,
+                issued_at INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL,
+                used INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS key_lifecycle (
                 key_id TEXT PRIMARY KEY,
                 created_at INTEGER NOT NULL,
@@ -579,6 +788,9 @@ def initialize_storage() -> None:
         connection.execute(
             "DELETE FROM sessions WHERE expires_at < ?", (int(time.time()),)
         )
+        connection.execute(
+            "DELETE FROM ukey_challenges WHERE expires_at < ?", (int(time.time()) - 300,)
+        )
     os.chmod(DATABASE_FILE, 0o600)
 
 
@@ -586,18 +798,46 @@ initialize_storage()
 app = FastAPI(title=PRODUCT_NAME, docs_url=None, redoc_url=None)
 
 
+class PasswordHashInput(BaseModel):
+    hash_base64: str
+    ticket_id: str | None = None
+
+
+class PasswordSaltRequest(BaseModel):
+    username: str
+
+
 class InitializeRequest(BaseModel):
     username: str
-    password: str
+    password: PasswordHashInput
     vendor: str = "SDFX Project"
-    device_name: str = "SDFX-1.1.3"
+    device_name: str = "SDFX-1.1.4"
     serial: str = "SW000001"
 
 
 
 class LoginRequest(BaseModel):
     username: str
-    password: str
+    password: PasswordHashInput
+
+
+class UKeyChallengeRequest(BaseModel):
+    username: str
+    password: PasswordHashInput
+
+
+class UKeyVerifyRequest(BaseModel):
+    username: str
+    challenge_id: str
+    signature_base64url: str
+    certificate_base64: str
+    digest_base64url: str | None = None
+
+
+class UKeyBindingRequest(BaseModel):
+    enabled: bool = True
+    user_certificate_base64: str
+    ca_certificate_base64: str
 
 
 class DeviceUpdate(BaseModel):
@@ -635,29 +875,30 @@ class KeyValidityRequest(BaseModel):
 
 class UserCreateRequest(BaseModel):
     username: str
-    password: str
+    password: PasswordHashInput
     role: str
 
 
 class UserUpdateRequest(BaseModel):
-    password: str | None = None
+    password: PasswordHashInput | None = None
     role: str | None = None
     enabled: bool | None = None
+    login_mode: str | None = None
 
 
 class ConfirmRequest(BaseModel):
-    password: str
+    password: PasswordHashInput
     confirmation: str
 
 
 class BackupRestoreRequest(BaseModel):
     backup_id: str
-    password: str
+    password: PasswordHashInput
     confirmation: str
 
 
 class ResetRequest(BaseModel):
-    password: str
+    password: PasswordHashInput
     serial: str
     confirmation: str
 
@@ -677,17 +918,6 @@ def validate_metadata(vendor: str, device_name: str, serial: str) -> None:
         encoded = value.encode("utf-8")
         if not value.strip() or len(encoded) > maximum:
             raise HTTPException(422, f"{label}必须为 1–{maximum} 字节")
-
-
-def validate_admin_password(password: str) -> None:
-    if len(password) < 10 or len(password) > 128:
-        raise HTTPException(422, "管理员密码长度必须为 10–128 个字符")
-    classes = sum(
-        bool(re.search(pattern, password))
-        for pattern in (r"[a-z]", r"[A-Z]", r"[0-9]", r"[^A-Za-z0-9]")
-    )
-    if classes < 3:
-        raise HTTPException(422, "管理员密码需包含大写、小写、数字、符号中的至少三类")
 
 
 def remote_addr(request: Request) -> str:
@@ -865,7 +1095,7 @@ def require_roles(*roles: str, csrf: bool = False):
     return dependency
 
 
-def verify_session_password(password: str, session: dict[str, Any]) -> bool:
+def verify_session_password(password: PasswordHashInput, session: dict[str, Any]) -> bool:
     state = require_initialized()
     user = state.get("users", {}).get(session["username"], {})
     return isinstance(user, dict) and verify_password(password, user.get("password", {}))
@@ -876,6 +1106,66 @@ def require_initialized() -> dict[str, Any]:
     if state is None:
         raise HTTPException(409, "设备尚未初始化")
     return state
+
+
+def certificate_chain_check(
+    ca_x: bytes, ca_y: bytes, message: bytes, signature: bytes,
+) -> bool:
+    digest = protocol.sm2_digest(ca_x, ca_y, message, UKEY_SM2_ID)
+    return protocol.sm2_verify_digest(ca_x, ca_y, digest, signature)
+
+
+def validate_ukey_binding(
+    user_certificate_base64: str,
+    ca_certificate_base64: str,
+) -> tuple[bytes, bytes, dict[str, Any]]:
+    try:
+        user_der = decode_certificate(user_certificate_base64)
+        ca_der = decode_certificate(ca_certificate_base64)
+        summary = validate_certificate_binding(
+            user_der,
+            ca_der,
+            certificate_chain_check,
+        )
+        return user_der, ca_der, summary
+    except UKeyCertificateError as error:
+        raise HTTPException(422, str(error)) from error
+
+
+def public_ukey_binding(user: dict[str, Any]) -> dict[str, Any] | None:
+    binding = user.get("ukey_auth")
+    if not isinstance(binding, dict):
+        return None
+    return {
+        "enabled": bool(binding.get("enabled", False)),
+        "configured_at": binding.get("configured_at"),
+        "configured_by": binding.get("configured_by"),
+        "revocation_mode": binding.get("revocation_mode", "off"),
+        "trust_mode": "uploaded_ca_anchor",
+        "validation": binding.get("validation", {}),
+    }
+
+
+def user_login_mode(user: dict[str, Any]) -> str:
+    mode = user.get("login_mode", "password")
+    if mode == "ukey_only":
+        return "password"
+    return mode if mode in LOGIN_MODES else "password"
+
+
+def require_ukey_user(username: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    state = require_initialized()
+    user = state.get("users", {}).get(username)
+    binding = user.get("ukey_auth") if isinstance(user, dict) else None
+    if (
+        not isinstance(user, dict)
+        or not user.get("enabled", True)
+        or not isinstance(binding, dict)
+        or not binding.get("enabled", False)
+        or user_login_mode(user) != "password_ukey"
+    ):
+        raise HTTPException(401, "用户名或 UKey 身份配置无效")
+    return user, binding
 
 
 def key_params(key_type: str, index: int) -> tuple[int, int, int, int]:
@@ -939,7 +1229,8 @@ async def request_context(request: Request, call_next):
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; style-src 'self'; script-src 'self'; "
-        "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
+        "img-src 'self' data:; connect-src 'self'; "
+        "frame-ancestors 'none'"
     )
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -957,14 +1248,33 @@ def health() -> dict[str, Any]:
     }
 
 
+@app.post("/api/auth/initialize-password-salt")
+def initialize_password_salt(payload: PasswordSaltRequest) -> dict[str, str | int]:
+    if load_state() is not None:
+        raise HTTPException(409, "设备已经初始化")
+    if not USERNAME_RE.fullmatch(payload.username):
+        raise HTTPException(422, "用户名仅允许 3–32 位字母、数字、点、横线和下划线")
+    return issue_password_salt(payload.username, "")
+
+
+@app.get("/api/auth/password-salt")
+def get_password_salt(username: str) -> dict[str, str]:
+    state = require_initialized()
+    user = state.get("users", {}).get(username)
+    values = password_record_values(user.get("password", {})) if isinstance(user, dict) else None
+    if values is None or not user.get("enabled", True):
+        raise HTTPException(401, "用户名或账户口令格式无效")
+    return {"salt_base64": base64.b64encode(values[0]).decode("ascii")}
+
+
 @app.post("/api/initialize", status_code=201)
 def initialize(payload: InitializeRequest, request: Request) -> dict[str, Any]:
     if load_state() is not None:
         raise HTTPException(409, "设备已经初始化")
     if not USERNAME_RE.fullmatch(payload.username):
         raise HTTPException(422, "用户名仅允许 3–32 位字母、数字、点、横线和下划线")
-    validate_admin_password(payload.password)
     validate_metadata(payload.vendor, payload.device_name, payload.serial)
+    stored_password = password_record(payload.password, payload.username, "")
 
     protocol.admin(CMD_ADMIN_INTEGRITY_INIT)
     protocol.configure_device(
@@ -977,7 +1287,8 @@ def initialize(payload: InitializeRequest, request: Request) -> dict[str, Any]:
             payload.username: {
                 "role": "super_admin",
                 "enabled": True,
-                "password": password_record(payload.password),
+                "login_mode": "password",
+                "password": stored_password,
                 "created_at": int(time.time()),
             }
         },
@@ -988,6 +1299,9 @@ def initialize(payload: InitializeRequest, request: Request) -> dict[str, Any]:
         },
     }
     atomic_json_write(STATE_FILE, state)
+    with db() as connection:
+        connection.execute("DELETE FROM sessions")
+        connection.execute("DELETE FROM ukey_challenges")
     audit(
         request, payload.username, "system_initialize", "device", "success",
         category="system", details="created super administrator and device integrity key",
@@ -1007,18 +1321,201 @@ def login(payload: LoginRequest, request: Request, response: Response) -> dict[s
 
     user = state.get("users", {}).get(payload.username)
     valid = isinstance(user, dict) and user.get("enabled", True)
+    valid = valid and user_login_mode(user) == "password"
     valid = valid and verify_password(payload.password, user.get("password", {}))
     if not valid:
         with login_lock:
             login_failures.setdefault(address, []).append(now)
         audit(request, payload.username[:32], "login", "manager", "failure")
-        raise HTTPException(401, "用户名或密码错误")
+        raise HTTPException(401, "用户名、密码或账户登录方式不正确")
 
     with login_lock:
         login_failures.pop(address, None)
     csrf = create_session(response, payload.username)
     audit(request, payload.username, "login", "manager", "success")
     return {"username": payload.username, "role": user["role"], "role_label": ROLE_LABELS[user["role"]], "pages": ROLE_PAGES[user["role"]], "csrf": csrf, "expires_in": SESSION_TTL}
+
+
+@app.post("/api/auth/ukey/challenge")
+def create_ukey_challenge(
+    payload: UKeyChallengeRequest,
+    request: Request,
+    response: Response,
+) -> dict[str, Any]:
+    address = remote_addr(request)
+    now_float = time.time()
+    with login_lock:
+        attempts = [item for item in login_failures.get(address, []) if now_float - item < 900]
+        login_failures[address] = attempts
+        if len(attempts) >= 5:
+            raise HTTPException(429, "登录失败次数过多，请 15 分钟后再试")
+    user, _ = require_ukey_user(payload.username)
+    login_mode = user_login_mode(user)
+    password_valid = verify_password(payload.password, user.get("password", {}))
+    if not password_valid:
+        with login_lock:
+            login_failures.setdefault(address, []).append(now_float)
+        audit(
+            request, payload.username[:32], "ukey_challenge_create", "manager",
+            "failure", level="WARN", category="access",
+            details="password factor failed for password_ukey mode",
+        )
+        raise HTTPException(401, "用户名、登录密码或账户登录方式不正确")
+
+    now = int(now_float)
+    expires_at = now + UKEY_CHALLENGE_TTL
+    challenge_id = secrets.token_urlsafe(24)
+    flow_token = secrets.token_urlsafe(32)
+    nonce = protocol.random(32)
+    signed_object = {
+        "version": "1",
+        "purpose": "cryptokit-soft-hsm-manager-login",
+        "username": payload.username,
+        "login_mode": login_mode,
+        "session_id": flow_token,
+        "nonce": base64url_encode(nonce),
+        "issued_at": now,
+        "expires_at": expires_at,
+    }
+    message = json.dumps(
+        signed_object, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    with db() as connection:
+        connection.execute("DELETE FROM ukey_challenges WHERE expires_at < ?", (now,))
+        connection.execute(
+            """
+            INSERT INTO ukey_challenges(
+                challenge_id, username, flow_hash, message, issued_at, expires_at, used
+            ) VALUES (?, ?, ?, ?, ?, ?, 0)
+            """,
+            (challenge_id, payload.username, session_hash(flow_token), message, now, expires_at),
+        )
+    response.set_cookie(
+        UKEY_FLOW_COOKIE_NAME,
+        flow_token,
+        max_age=UKEY_CHALLENGE_TTL,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="strict",
+        path="/api/auth/ukey",
+    )
+    audit(
+        request, payload.username, "ukey_challenge_create", "manager", "success",
+        category="access", details=f"challenge_id={challenge_id[:12]};ttl={UKEY_CHALLENGE_TTL}",
+    )
+    return {
+        "challenge_id": challenge_id,
+        "challenge_base64url": base64url_encode(message),
+        "expires_at": expires_at,
+        "expires_in": UKEY_CHALLENGE_TTL,
+        "sm2_user_id": UKEY_SM2_ID.decode("ascii"),
+        "agent_endpoint": "http://127.0.0.1:18088",
+    }
+
+
+@app.post("/api/auth/ukey/verify")
+def verify_ukey_login(
+    payload: UKeyVerifyRequest,
+    request: Request,
+    response: Response,
+) -> dict[str, Any]:
+    user, binding = require_ukey_user(payload.username)
+    login_mode = user_login_mode(user)
+    flow_token = request.cookies.get(UKEY_FLOW_COOKIE_NAME, "")
+    now = int(time.time())
+    with db() as connection:
+        row = connection.execute(
+            """
+            SELECT username, flow_hash, message, expires_at, used
+            FROM ukey_challenges WHERE challenge_id = ?
+            """,
+            (payload.challenge_id,),
+        ).fetchone()
+    try:
+        challenge_login_mode = json.loads(bytes(row["message"]).decode("utf-8")).get(
+            "login_mode"
+        ) if row is not None else None
+    except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+        challenge_login_mode = None
+    valid_challenge = (
+        row is not None
+        and row["username"] == payload.username
+        and not row["used"]
+        and int(row["expires_at"]) >= now
+        and bool(flow_token)
+        and hmac.compare_digest(row["flow_hash"], session_hash(flow_token))
+        and challenge_login_mode == login_mode
+    )
+    if not valid_challenge:
+        with login_lock:
+            login_failures.setdefault(remote_addr(request), []).append(time.time())
+        audit(
+            request, payload.username[:32], "ukey_login", "manager", "failure",
+            level="WARN", category="access", details="invalid, expired, used, or unbound challenge",
+        )
+        raise HTTPException(401, "UKey 登录挑战无效、已过期或已使用")
+
+    try:
+        configured_user_der, _, validation = validate_ukey_binding(
+            binding["user_certificate_base64"],
+            binding["ca_certificate_base64"],
+        )
+        presented_der = decode_certificate(payload.certificate_base64)
+        if not hmac.compare_digest(
+            hashlib.sha256(presented_der).digest(),
+            hashlib.sha256(configured_user_der).digest(),
+        ):
+            raise UKeyCertificateError("UKey 返回证书与管理员绑定证书不一致")
+        signature = base64url_decode(payload.signature_base64url)
+        if len(signature) != 64:
+            raise UKeyCertificateError("UKey 签名必须为 64 字节 r||s")
+        message = bytes(row["message"])
+        public_x, public_y = sm2_public_point(configured_user_der)
+        digest = protocol.sm2_digest(public_x, public_y, message, UKEY_SM2_ID)
+        if payload.digest_base64url is not None:
+            agent_digest = base64url_decode(payload.digest_base64url)
+            if not hmac.compare_digest(agent_digest, digest):
+                raise UKeyCertificateError("UKey Agent 返回的消息摘要与密码机计算结果不一致")
+        if not protocol.sm2_verify_digest(public_x, public_y, digest, signature):
+            raise UKeyCertificateError("UKey 挑战签名验证失败")
+    except UKeyCertificateError as error:
+        with login_lock:
+            login_failures.setdefault(remote_addr(request), []).append(time.time())
+        audit(
+            request, payload.username[:32], "ukey_login", "manager", "failure",
+            level="WARN", category="access", details=str(error),
+        )
+        raise HTTPException(401, str(error)) from error
+
+    with db() as connection:
+        changed = connection.execute(
+            "UPDATE ukey_challenges SET used = 1 WHERE challenge_id = ? AND used = 0",
+            (payload.challenge_id,),
+        ).rowcount
+    if changed != 1:
+        raise HTTPException(401, "UKey 登录挑战已经使用")
+
+    with login_lock:
+        login_failures.pop(remote_addr(request), None)
+    csrf = create_session(response, payload.username)
+    response.delete_cookie(UKEY_FLOW_COOKIE_NAME, path="/api/auth/ukey")
+    audit(
+        request, payload.username, "ukey_login", "manager", "success",
+        category="access",
+        details=(
+            "certificate_sha256="
+            + validation["user_certificate"]["sha256_fingerprint"]
+        ),
+    )
+    return {
+        "username": payload.username,
+        "role": user["role"],
+        "role_label": ROLE_LABELS[user["role"]],
+        "pages": ROLE_PAGES[user["role"]],
+        "csrf": csrf,
+        "expires_in": SESSION_TTL,
+        "authentication": "password-and-ukey-sm2-challenge",
+    }
 
 
 @app.get("/api/auth/session")
@@ -1129,7 +1626,10 @@ def list_administrators(
             "role": user["role"],
             "role_label": ROLE_LABELS[user["role"]],
             "enabled": user.get("enabled", True),
+            "login_mode": user_login_mode(user),
+            "login_mode_label": LOGIN_MODE_LABELS[user_login_mode(user)],
             "created_at": user.get("created_at", state["initialized_at"]),
+            "ukey_auth": public_ukey_binding(user),
         }
         for username, user in sorted(state.get("users", {}).items())
     ]
@@ -1145,19 +1645,39 @@ def create_administrator(
         raise HTTPException(422, "用户名仅允许 3–32 位字母、数字、点、横线和下划线")
     if payload.role not in ROLES:
         raise HTTPException(422, "管理员角色无效")
-    validate_admin_password(payload.password)
     state = require_initialized()
     if payload.username in state.get("users", {}):
         raise HTTPException(409, "管理员已经存在")
+    stored_password = password_record(payload.password, payload.username, session["username"])
     state.setdefault("users", {})[payload.username] = {
         "role": payload.role,
         "enabled": True,
-        "password": password_record(payload.password),
+        "login_mode": "password",
+        "password": stored_password,
         "created_at": int(time.time()),
     }
     atomic_json_write(STATE_FILE, state)
     audit(request, session["username"], "administrator_create", payload.username, "success", category="access", details=f"role={payload.role}")
-    return {"username": payload.username, "role": payload.role, "role_label": ROLE_LABELS[payload.role], "enabled": True}
+    return {
+        "username": payload.username,
+        "role": payload.role,
+        "role_label": ROLE_LABELS[payload.role],
+        "enabled": True,
+        "login_mode": "password",
+        "login_mode_label": LOGIN_MODE_LABELS["password"],
+    }
+
+
+@app.post("/api/administrators/{username}/password-salt")
+def create_administrator_password_salt(
+    username: str,
+    session: dict[str, Any] = Depends(require_roles("super_admin", csrf=True)),
+) -> dict[str, str | int]:
+    if not USERNAME_RE.fullmatch(username):
+        raise HTTPException(422, "用户名仅允许 3–32 位字母、数字、点、横线和下划线")
+    return issue_password_salt(
+        username, session["username"], preserve_existing=True
+    )
 
 
 @app.patch("/api/administrators/{username}")
@@ -1176,12 +1696,21 @@ def update_administrator(
             raise HTTPException(422, "管理员角色无效")
         user["role"] = payload.role
     if payload.password is not None:
-        validate_admin_password(payload.password)
-        user["password"] = password_record(payload.password)
+        user["password"] = password_record(
+            payload.password, username, session["username"]
+        )
     if payload.enabled is not None:
         if username == session["username"] and not payload.enabled:
             raise HTTPException(409, "不能停用当前登录账户")
         user["enabled"] = payload.enabled
+    if payload.login_mode is not None:
+        if payload.login_mode not in LOGIN_MODES:
+            raise HTTPException(422, "管理员登录方式无效")
+        if payload.login_mode == "password_ukey":
+            binding = user.get("ukey_auth")
+            if not isinstance(binding, dict) or not binding.get("enabled", False):
+                raise HTTPException(409, "请先配置并启用该管理员的 UKey，再选择此登录方式")
+        user["login_mode"] = payload.login_mode
     enabled_super = sum(
         1 for item in state["users"].values()
         if item.get("role") == "super_admin" and item.get("enabled", True)
@@ -1192,8 +1721,94 @@ def update_administrator(
     if not user.get("enabled", True):
         with db() as connection:
             connection.execute("DELETE FROM sessions WHERE username = ?", (username,))
-    audit(request, session["username"], "administrator_update", username, "success", category="access", details=f"role={user['role']};enabled={user.get('enabled', True)}")
-    return {"username": username, "role": user["role"], "role_label": ROLE_LABELS[user["role"]], "enabled": user.get("enabled", True)}
+    audit(
+        request, session["username"], "administrator_update", username,
+        "success", category="access",
+        details=(
+            f"role={user['role']};enabled={user.get('enabled', True)};"
+            f"login_mode={user_login_mode(user)}"
+        ),
+    )
+    return {
+        "username": username,
+        "role": user["role"],
+        "role_label": ROLE_LABELS[user["role"]],
+        "enabled": user.get("enabled", True),
+        "login_mode": user_login_mode(user),
+        "login_mode_label": LOGIN_MODE_LABELS[user_login_mode(user)],
+    }
+
+
+@app.put("/api/administrators/{username}/ukey")
+def configure_administrator_ukey(
+    username: str,
+    payload: UKeyBindingRequest,
+    request: Request,
+    session: dict[str, Any] = Depends(require_roles("super_admin", csrf=True)),
+) -> dict[str, Any]:
+    state = require_initialized()
+    user = state.get("users", {}).get(username)
+    if not isinstance(user, dict):
+        raise HTTPException(404, "管理员不存在")
+    user_der, ca_der, validation = validate_ukey_binding(
+        payload.user_certificate_base64,
+        payload.ca_certificate_base64,
+    )
+    if not payload.enabled and user_login_mode(user) == "password_ukey":
+        raise HTTPException(409, "请先把管理员登录方式改为“用户名口令”，再停用 UKey")
+    configured_at = int(time.time())
+    with state_lock:
+        refreshed_state = require_initialized()
+        refreshed_user = refreshed_state.get("users", {}).get(username)
+        if not isinstance(refreshed_user, dict):
+            raise HTTPException(404, "管理员不存在")
+        refreshed_user["ukey_auth"] = {
+            "enabled": payload.enabled,
+            "user_certificate_base64": base64.b64encode(user_der).decode("ascii"),
+            "ca_certificate_base64": base64.b64encode(ca_der).decode("ascii"),
+            "revocation_mode": "off",
+            "trust_mode": "uploaded_ca_anchor",
+            "configured_at": configured_at,
+            "configured_by": session["username"],
+            "validation": validation,
+        }
+        atomic_json_write(STATE_FILE, refreshed_state)
+        result = public_ukey_binding(refreshed_user)
+    audit(
+        request, session["username"], "administrator_ukey_configure", username,
+        "success", category="access",
+        details=(
+            f"enabled={payload.enabled};"
+            f"certificate_sha256={validation['user_certificate']['sha256_fingerprint']}"
+        ),
+    )
+    return result or {}
+
+
+@app.delete("/api/administrators/{username}/ukey")
+def remove_administrator_ukey(
+    username: str,
+    request: Request,
+    session: dict[str, Any] = Depends(require_roles("super_admin", csrf=True)),
+) -> dict[str, bool]:
+    with state_lock:
+        state = require_initialized()
+        user = state.get("users", {}).get(username)
+        if not isinstance(user, dict):
+            raise HTTPException(404, "管理员不存在")
+        if not isinstance(user.get("ukey_auth"), dict):
+            raise HTTPException(404, "管理员尚未配置 UKey 身份鉴别")
+        if user_login_mode(user) == "password_ukey":
+            raise HTTPException(409, "请先把管理员登录方式改为“用户名口令”，再移除 UKey 配置")
+        del user["ukey_auth"]
+        atomic_json_write(STATE_FILE, state)
+    with db() as connection:
+        connection.execute("DELETE FROM ukey_challenges WHERE username = ?", (username,))
+    audit(
+        request, session["username"], "administrator_ukey_remove", username,
+        "success", category="access",
+    )
+    return {"removed": True}
 
 
 @app.delete("/api/administrators/{username}")

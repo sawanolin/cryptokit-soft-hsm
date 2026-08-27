@@ -1,8 +1,142 @@
 "use strict";
 
-const state = { csrf: null, initialized: false, page: null, role: null, pages: [] };
+const state = { csrf: null, initialized: false, page: null, role: null, username: null, pages: [] };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+const UKEY_AGENT_ORIGIN = "http://127.0.0.1:18088";
+
+function rotateLeft(value, count) {
+  const bits = count & 31;
+  return ((value << bits) | (value >>> ((32 - bits) & 31))) >>> 0;
+}
+
+function add32(...values) {
+  let result = 0;
+  for (const value of values) result = (result + (value >>> 0)) >>> 0;
+  return result;
+}
+
+function sm3(bytes) {
+  const length = bytes.length;
+  const total = Math.ceil((length + 1 + 8) / 64) * 64;
+  const padded = new Uint8Array(total);
+  padded.set(bytes);
+  padded[length] = 0x80;
+  let bitLength = BigInt(length) * 8n;
+  for (let index = 0; index < 8; index += 1) {
+    padded[total - 1 - index] = Number(bitLength & 0xffn);
+    bitLength >>= 8n;
+  }
+
+  const hash = new Uint32Array([
+    0x7380166f, 0x4914b2b9, 0x172442d7, 0xda8a0600,
+    0xa96f30bc, 0x163138aa, 0xe38dee4d, 0xb0fb0e4e,
+  ]);
+  const words = new Uint32Array(68);
+  const expanded = new Uint32Array(64);
+  const p0 = (value) => (value ^ rotateLeft(value, 9) ^ rotateLeft(value, 17)) >>> 0;
+  const p1 = (value) => (value ^ rotateLeft(value, 15) ^ rotateLeft(value, 23)) >>> 0;
+
+  for (let offset = 0; offset < total; offset += 64) {
+    for (let index = 0; index < 16; index += 1) {
+      const pos = offset + index * 4;
+      words[index] = (
+        (padded[pos] << 24) | (padded[pos + 1] << 16) |
+        (padded[pos + 2] << 8) | padded[pos + 3]
+      ) >>> 0;
+    }
+    for (let index = 16; index < 68; index += 1) {
+      words[index] = (
+        p1(words[index - 16] ^ words[index - 9] ^ rotateLeft(words[index - 3], 15)) ^
+        rotateLeft(words[index - 13], 7) ^ words[index - 6]
+      ) >>> 0;
+    }
+    for (let index = 0; index < 64; index += 1) {
+      expanded[index] = (words[index] ^ words[index + 4]) >>> 0;
+    }
+
+    let [a, b, c, d, e, f, g, h] = hash;
+    for (let index = 0; index < 64; index += 1) {
+      const first = index < 16;
+      const ff = first ? (a ^ b ^ c) : ((a & b) | (a & c) | (b & c));
+      const gg = first ? (e ^ f ^ g) : ((e & f) | ((~e) & g));
+      const ss1 = rotateLeft(add32(rotateLeft(a, 12), e, rotateLeft(first ? 0x79cc4519 : 0x7a879d8a, index)), 7);
+      const ss2 = (ss1 ^ rotateLeft(a, 12)) >>> 0;
+      const tt1 = add32(ff, d, ss2, expanded[index]);
+      const tt2 = add32(gg, h, ss1, words[index]);
+      d = c; c = rotateLeft(b, 9); b = a; a = tt1;
+      h = g; g = rotateLeft(f, 19); f = e; e = p0(tt2);
+    }
+    [a, b, c, d, e, f, g, h].forEach((value, index) => { hash[index] ^= value; });
+  }
+
+  const output = new Uint8Array(32);
+  hash.forEach((value, index) => {
+    output[index * 4] = value >>> 24;
+    output[index * 4 + 1] = value >>> 16;
+    output[index * 4 + 2] = value >>> 8;
+    output[index * 4 + 3] = value;
+  });
+  return output;
+}
+
+function base64Bytes(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function bytesBase64(value) {
+  let binary = "";
+  for (const byte of value) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function validateAdminPassword(password) {
+  if (password.length < 10 || password.length > 128) {
+    throw new Error("管理员密码长度必须为 10–128 个字符");
+  }
+  const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/]
+    .filter((pattern) => pattern.test(password)).length;
+  if (classes < 3) throw new Error("管理员密码需包含大写、小写、数字、符号中的至少三类");
+}
+
+function hashPassword(password, saltBase64) {
+  const passwordBytes = new TextEncoder().encode(password);
+  const salt = base64Bytes(saltBase64);
+  if (salt.length !== 8) throw new Error("服务器返回的账户口令盐值长度无效");
+  const input = new Uint8Array(passwordBytes.length + salt.length);
+  input.set(passwordBytes);
+  input.set(salt, passwordBytes.length);
+  const digest = sm3(input);
+  passwordBytes.fill(0);
+  input.fill(0);
+  return bytesBase64(digest);
+}
+
+async function passwordHashForUser(username, password) {
+  const response = await api(`/api/auth/password-salt?username=${encodeURIComponent(username)}`);
+  return { hash_base64: hashPassword(password, response.salt_base64) };
+}
+
+async function newPasswordMaterial(username, password, initialize = false) {
+  validateAdminPassword(password);
+  const path = initialize
+    ? "/api/auth/initialize-password-salt"
+    : `/api/administrators/${encodeURIComponent(username)}/password-salt`;
+  const response = await api(path, {
+    method: "POST",
+    body: initialize ? JSON.stringify({ username }) : "{}",
+  });
+  return {
+    ticket_id: response.ticket_id,
+    hash_base64: hashPassword(password, response.salt_base64),
+  };
+}
+
+async function currentPasswordHash(password) {
+  if (!state.username) throw new Error("当前管理会话缺少用户名");
+  return passwordHashForUser(state.username, password);
+}
 
 function notice(message, error = false) {
   const host = $("#notice");
@@ -28,8 +162,100 @@ async function api(path, options = {}) {
   return data;
 }
 
+async function fileBase64(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
 function formJson(form) {
   return Object.fromEntries(new FormData(form).entries());
+}
+
+function showAuthTab(tab) {
+  $$("[data-auth-tab]").forEach((button) => {
+    const active = button.dataset.authTab === tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  $$("[data-auth-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.authPanel !== tab;
+  });
+}
+
+function showUKeyAgentDialog() {
+  const dialog = $("#ukey-agent-dialog");
+  if (!dialog.open) dialog.showModal();
+}
+
+function unavailableError(message) {
+  const error = new Error(message);
+  error.ukeyAgentUnavailable = true;
+  return error;
+}
+
+function openUKeyBridge() {
+  const width = 380;
+  const height = 330;
+  const left = Math.max(0, Math.round((window.screenX || 0) + (window.outerWidth - width) / 2));
+  const top = Math.max(0, Math.round((window.screenY || 0) + (window.outerHeight - height) / 2));
+  return window.open(
+    `${UKEY_AGENT_ORIGIN}/bridge/pin`,
+    "cryptokit-ukey-pin",
+    `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=no,scrollbars=no`
+  );
+}
+
+function signWithUKeyBridge(popup, challenge, username) {
+  return new Promise((resolve, reject) => {
+    let requestSent = false;
+    let bridgeReady = false;
+    let timer = null;
+
+    function finish(error, result) {
+      window.clearInterval(closeWatcher);
+      window.clearTimeout(timer);
+      window.removeEventListener("message", onMessage);
+      if (error) reject(error); else resolve(result);
+    }
+
+    function onMessage(event) {
+      const data = event.data;
+      if (event.source !== popup || !data || data.source !== "cryptokit-ukey-bridge") return;
+      if (data.type === "ready" && !requestSent) {
+        bridgeReady = true;
+        requestSent = true;
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => finish(new Error("UKey 签名等待超时")), 120000);
+        popup.postMessage({
+          source: "cryptokit-soft-hsm",
+          type: "sign",
+          channel_id: challenge.challenge_id,
+          username,
+          challenge_base64url: challenge.challenge_base64url,
+          user_id: challenge.sm2_user_id,
+        }, UKEY_AGENT_ORIGIN);
+      } else if (data.type === "result" && data.channel_id === challenge.challenge_id) {
+        finish(null, data.result);
+      } else if (data.type === "cancel" && (!data.channel_id || data.channel_id === challenge.challenge_id)) {
+        finish(new Error("已取消 UKey 登录"));
+      }
+    }
+
+    const closeWatcher = window.setInterval(() => {
+      if (popup.closed) {
+        finish(bridgeReady ? new Error("已取消 UKey 登录") : unavailableError("未检测到本机 UKey 插件"));
+      }
+    }, 350);
+    window.addEventListener("message", onMessage);
+    timer = window.setTimeout(
+      () => finish(unavailableError("未检测到本机 UKey 插件，请先启动或下载安装")),
+      5000
+    );
+  });
 }
 
 async function copyText(text) {
@@ -87,6 +313,7 @@ function setService(ok, text) {
 function applyAccess(session) {
   state.csrf = session.csrf;
   state.role = session.role;
+  state.username = session.username;
   state.pages = session.pages || [];
   $$("#nav button").forEach((button) => {
     button.hidden = !state.pages.includes(button.dataset.page);
@@ -365,7 +592,10 @@ $("#initialize-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   const data = formJson(form);
+  const password = data.password;
+  form.password.value = "";
   try {
+    data.password = await newPasswordMaterial(data.username.trim(), password, true);
     await api("/api/initialize", { method: "POST", body: JSON.stringify(data) });
     form.reset();
     showMode("login");
@@ -378,8 +608,11 @@ $("#login-form").addEventListener("submit", async (event) => {
 
   const form = event.currentTarget;
   const data = formJson(form);
+  const password = data.password;
+  form.password.value = "";
 
   try {
+    data.password = await passwordHashForUser(data.username.trim(), password);
     const result = await api("/api/auth/login", {
       method: "POST",
       body: JSON.stringify(data),
@@ -396,6 +629,7 @@ $("#login-form").addEventListener("submit", async (event) => {
 $("#logout").addEventListener("click", async () => {
   try { await api("/api/auth/logout", { method: "POST", body: "{}" }); } catch (_) {}
   state.csrf = null;
+  state.username = null;
   showMode("login");
 });
 
@@ -435,6 +669,60 @@ $("#key-form").addEventListener("submit", async (event) => {
   } catch (error) { notice(error.message, true); }
 });
 
+$$("[data-auth-tab]").forEach((button) => {
+  button.addEventListener("click", () => showAuthTab(button.dataset.authTab));
+});
+
+$("#ukey-login-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = $("button[type=submit]", form);
+  const username = form.username.value.trim();
+  const password = form.password.value;
+  form.password.value = "";
+  const popup = openUKeyBridge();
+  if (!popup) {
+    showUKeyAgentDialog();
+    notice("浏览器未能打开 UKey PIN 窗口，请允许本站弹出窗口", true);
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "正在验证 UKey…";
+  try {
+    const passwordHash = await passwordHashForUser(username, password);
+    const challenge = await api("/api/auth/ukey/challenge", {
+      method: "POST",
+      body: JSON.stringify({ username, password: passwordHash }),
+    });
+    const signed = await signWithUKeyBridge(popup, challenge, username);
+    const result = await api("/api/auth/ukey/verify", {
+      method: "POST",
+      body: JSON.stringify({
+        username,
+        challenge_id: challenge.challenge_id,
+        signature_base64url: signed.signature_base64url,
+        digest_base64url: signed.digest_base64url,
+        certificate_base64: signed.certificate_base64,
+      }),
+    });
+    form.reset();
+    showMode("app");
+    applyAccess(result);
+  } catch (error) {
+    if (error.ukeyAgentUnavailable) showUKeyAgentDialog();
+    notice(error.message, true);
+  } finally {
+    if (!popup.closed) popup.close();
+    button.disabled = false;
+    button.textContent = "使用 UKey 登录";
+  }
+});
+
+$("#retry-ukey-agent").addEventListener("click", () => {
+  $("#ukey-agent-dialog").close();
+  $("#ukey-login-form").requestSubmit();
+});
+
 $("#validity-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -471,7 +759,10 @@ $("#delete-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   const data = formJson(form);
+  const password = data.password;
+  form.password.value = "";
   try {
+    data.password = await currentPasswordHash(password);
     await api(`/api/keys/${data.key_type}/${data.index}?algorithm=${encodeURIComponent(data.algorithm)}`, {
       method: "DELETE",
       body: JSON.stringify({ password: data.password, confirmation: data.confirmation }),
@@ -485,19 +776,33 @@ $("#delete-form").addEventListener("submit", async (event) => {
 
 async function loadAdministrators() {
   const rows = $("#admin-rows");
-  rows.innerHTML = '<tr><td colspan="5">正在读取…</td></tr>';
+  rows.innerHTML = '<tr><td colspan="7">正在读取…</td></tr>';
   try {
     const users = await api("/api/administrators"); rows.innerHTML = "";
     for (const user of users) {
       const tr = document.createElement("tr");
-      [user.username, user.role_label, user.enabled ? "启用" : "停用", new Date(user.created_at * 1000).toLocaleString()].forEach((value) => {
+      [user.username, user.role_label, user.enabled ? "启用" : "停用", user.login_mode_label, user.ukey_auth?.enabled ? "已启用" : user.ukey_auth ? "已配置/停用" : "未配置", new Date(user.created_at * 1000).toLocaleString()].forEach((value) => {
         const td = document.createElement("td"); td.textContent = value; tr.append(td);
       });
       const actions = document.createElement("td"); actions.className = "actions";
       actions.append(actionButton("配置", "", () => {
         const form = $("#admin-edit-form"); form.username.value = user.username;
-        form.role.value = user.role; form.password.value = ""; form.enabled.checked = user.enabled;
+        form.role.value = user.role; form.login_mode.value = user.login_mode;
+        form.password.value = ""; form.enabled.checked = user.enabled;
         $("#admin-edit-dialog").showModal();
+      }));
+      actions.append(actionButton("UKey", "", () => {
+        const form = $("#admin-ukey-form");
+        form.reset();
+        form.username.value = user.username;
+        form.enabled.checked = user.ukey_auth?.enabled ?? true;
+        $("#admin-ukey-account").textContent = `管理员：${user.username}`;
+        const cert = user.ukey_auth?.validation?.user_certificate;
+        $("#admin-ukey-summary").textContent = cert
+          ? `主题：${cert.subject}\n颁发者：${cert.issuer}\n序列号：${cert.serial_number}\n有效期：${cert.not_before} ～ ${cert.not_after}\nSHA-256：${cert.sha256_fingerprint}`
+          : "尚未配置";
+        $("#remove-admin-ukey").hidden = !user.ukey_auth;
+        $("#admin-ukey-dialog").showModal();
       }));
       actions.append(actionButton("删除", "delete", () => {
         const form = $("#admin-delete-form"); form.username.value = user.username;
@@ -510,20 +815,22 @@ async function loadAdministrators() {
 
 $("#open-admin-dialog").addEventListener("click", () => $("#admin-dialog").showModal());
 $("#admin-form").addEventListener("submit", async (event) => {
-  event.preventDefault(); const form = event.currentTarget;
-  try { await api("/api/administrators", { method: "POST", body: JSON.stringify(formJson(form)) }); $("#admin-dialog").close(); form.reset(); notice("管理员已创建"); await loadAdministrators(); }
+  event.preventDefault(); const form = event.currentTarget; const data = formJson(form);
+  const password = data.password; form.password.value = "";
+  try { data.password = await newPasswordMaterial(data.username.trim(), password); await api("/api/administrators", { method: "POST", body: JSON.stringify(data) }); $("#admin-dialog").close(); form.reset(); notice("管理员已创建"); await loadAdministrators(); }
   catch (error) { notice(error.message, true); }
 });
 $("#admin-edit-form").addEventListener("submit", async (event) => {
   event.preventDefault(); const form = event.currentTarget; const data = formJson(form);
-  const body = { role: data.role, enabled: form.enabled.checked };
-  if (data.password) body.password = data.password;
-  try { await api(`/api/administrators/${encodeURIComponent(data.username)}`, { method: "PATCH", body: JSON.stringify(body) }); $("#admin-edit-dialog").close(); form.reset(); notice("管理员配置已保存"); await loadAdministrators(); }
+  const body = { role: data.role, login_mode: data.login_mode, enabled: form.enabled.checked };
+  const password = data.password; form.password.value = "";
+  try { if (password) body.password = await newPasswordMaterial(data.username, password); await api(`/api/administrators/${encodeURIComponent(data.username)}`, { method: "PATCH", body: JSON.stringify(body) }); $("#admin-edit-dialog").close(); form.reset(); notice("管理员配置已保存"); await loadAdministrators(); }
   catch (error) { notice(error.message, true); }
 });
 $("#admin-delete-form").addEventListener("submit", async (event) => {
   event.preventDefault(); const form = event.currentTarget; const data = formJson(form);
-  try { await api(`/api/administrators/${encodeURIComponent(data.username)}`, { method: "DELETE", body: JSON.stringify({ password: data.password, confirmation: data.confirmation }) }); $("#admin-delete-dialog").close(); form.reset(); notice("管理员已删除"); await loadAdministrators(); }
+  const password = data.password; form.password.value = "";
+  try { const passwordHash = await currentPasswordHash(password); await api(`/api/administrators/${encodeURIComponent(data.username)}`, { method: "DELETE", body: JSON.stringify({ password: passwordHash, confirmation: data.confirmation }) }); $("#admin-delete-dialog").close(); form.reset(); notice("管理员已删除"); await loadAdministrators(); }
   catch (error) { notice(error.message, true); }
 });
 $("#reindex-form").addEventListener("submit", async (event) => {
@@ -573,6 +880,45 @@ $("#audit-settings-form").addEventListener("submit", async (event) => {
 $("#refresh-audit").addEventListener("click", loadAudit);
 $("#audit-filter-form").addEventListener("submit", async (event) => {
   event.preventDefault(); await loadAudit();
+});
+
+$("#admin-ukey-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const userCertificate = form.user_certificate.files[0];
+  const caCertificate = form.ca_certificate.files[0];
+  if (!userCertificate || !caCertificate) {
+    notice("请选择用户签名证书和 CA 证书", true);
+    return;
+  }
+  try {
+    const result = await api(`/api/administrators/${encodeURIComponent(form.username.value)}/ukey`, {
+      method: "PUT",
+      body: JSON.stringify({
+        enabled: form.enabled.checked,
+        user_certificate_base64: await fileBase64(userCertificate),
+        ca_certificate_base64: await fileBase64(caCertificate),
+      }),
+    });
+    const cert = result.validation.user_certificate;
+    $("#admin-ukey-summary").textContent = `主题：${cert.subject}\n颁发者：${cert.issuer}\n序列号：${cert.serial_number}\n有效期：${cert.not_before} ～ ${cert.not_after}\nSHA-256：${cert.sha256_fingerprint}`;
+    $("#remove-admin-ukey").hidden = false;
+    notice("UKey 证书链校验通过，身份鉴别配置已保存");
+    await loadAdministrators();
+  } catch (error) {
+    notice(error.message, true);
+  }
+});
+
+$("#remove-admin-ukey").addEventListener("click", async () => {
+  const form = $("#admin-ukey-form");
+  if (!window.confirm(`确认移除管理员 ${form.username.value} 的 UKey 身份鉴别配置？`)) return;
+  try {
+    await api(`/api/administrators/${encodeURIComponent(form.username.value)}/ukey`, { method: "DELETE", body: "{}" });
+    $("#admin-ukey-dialog").close();
+    notice("UKey 身份鉴别配置已移除");
+    await loadAdministrators();
+  } catch (error) { notice(error.message, true); }
 });
 $("#audit-filter-form").addEventListener("reset", () => setTimeout(loadAudit, 0));
 $("#audit-export-form").addEventListener("submit", (event) => {

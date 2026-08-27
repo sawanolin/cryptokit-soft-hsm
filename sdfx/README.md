@@ -189,7 +189,7 @@ Passwords, key material, and protocol payloads are deliberately excluded. Web ma
 
 - TCP 18081 and HTTP 18080 do not provide built-in TLS or mutual authentication.
 - Bind them only to trusted networks or protect them with firewalling and an HTTPS reverse proxy.
-- `/var/lib/sdfx` is the persistent software security boundary. Reusing a named volume reuses administrators, password hashes, device keys, business keys, audit data, and files.
+- `/var/lib/sdfx` is the persistent software security boundary. Reusing a named volume reuses administrators, their fixed 8-byte password salts and SM3 password hashes, device keys, business keys, audit data, and files. Web account records are stored in `/var/lib/sdfx/web/state.json`.
 - Backups are validated but are not encrypted as a whole archive.
 - A host or Docker administrator with volume access can read software-protected device secrets.
 - Never put real credentials, private keys, tokens, or backup archives in source control or an image layer.

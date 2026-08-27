@@ -71,7 +71,7 @@ SHA-1/224/384/512 是 `SDFX_*` 教学扩展，使用标准预留的自定义杂�
 
 ```powershell
 .\scripts\build_windows_sdk.ps1
-.\scripts\package_windows_sdk.ps1 -Version 1.1.3 -Force
+.\scripts\package_windows_sdk.ps1 -Version 1.1.4 -Force
 ```
 
 检查脚本会核对 `sdf.h` 声明的全部 `SDF_*` 导出，并确认 DLL 不依赖 `libwinpthread-1.dll`。打包脚本只按白名单复制上述最小文件，生成 `release/sdfapi-windows-x64-版本.zip` 和新的 `SHA256SUMS`。

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, http.cookiejar, json, urllib.error, urllib.request
+import argparse, base64, http.cookiejar, json, urllib.error, urllib.parse, urllib.request
+
+from web_password import password_hash, password_material
 
 class Client:
     def __init__(self, base: str):
@@ -26,9 +28,19 @@ class Client:
         assert status == expected, (path, status, payload)
         return payload
     def login(self, username, password):
-        result = self.call("/api/auth/login", "POST", {"username": username, "password": password})
+        salt = self.call(f"/api/auth/password-salt?username={urllib.parse.quote(username)}")["salt_base64"]
+        result = self.call("/api/auth/login", "POST", {"username": username, "password": password_hash(password, salt)})
         self.csrf = result["csrf"]
         return result
+    def new_password(self, username, password, initialize=False):
+        if initialize:
+            response = self.call("/api/auth/initialize-password-salt", "POST", {"username": username})
+        else:
+            response = self.call(
+                f"/api/administrators/{urllib.parse.quote(username)}/password-salt",
+                "POST", {},
+            )
+        return password_material(password, response)
     def logout(self):
         self.call("/api/auth/logout", "POST", {})
         self.csrf = None
@@ -40,7 +52,7 @@ def main():
     super_client = Client(args.base_url)
     assert super_client.call("/api/health")["initialized"] is False
     super_client.call("/api/initialize", "POST", {
-        "username": "rootadmin", "password": "Root!Admin2026",
+        "username": "rootadmin", "password": super_client.new_password("rootadmin", "Root!Admin2026", True),
         "vendor": "CryptoKit", "device_name": "SoftHSM-RBAC", "serial": "RBAC000001"
     }, expected=201)
     login = super_client.login("rootadmin", "Root!Admin2026")
@@ -53,8 +65,31 @@ def main():
         ("secadmin", "Security!Admin2026", "security_admin"),
         ("auditor", "Audit!Admin2026", "audit_admin"),
     ):
-        super_client.call("/api/administrators", "POST", {"username": username, "password": password, "role": role}, expected=201)
+        super_client.call("/api/administrators", "POST", {"username": username, "password": super_client.new_password(username, password), "role": role}, expected=201)
     assert len(super_client.call("/api/administrators")) == 4
+    salts = [
+        super_client.call(
+            f"/api/auth/password-salt?username={urllib.parse.quote(username)}"
+        )["salt_base64"]
+        for username in ("rootadmin", "sysadmin", "secadmin", "auditor")
+    ]
+    assert len(set(salts)) == 4
+    assert all(len(base64.b64decode(value, validate=True)) == 8 for value in salts)
+    assert salts[0] == super_client.call(
+        "/api/auth/password-salt?username=rootadmin"
+    )["salt_base64"]
+    super_client.call(
+        "/api/administrators/sysadmin", "PATCH",
+        {"password": super_client.new_password("sysadmin", "System!Admin2026-Changed")},
+    )
+    assert salts[1] == super_client.call(
+        "/api/auth/password-salt?username=sysadmin"
+    )["salt_base64"]
+    super_client.call(
+        "/api/auth/login", "POST",
+        {"username": "rootadmin", "password": "Root!Admin2026"},
+        expected=422,
+    )
     super_client.logout()
 
     security = Client(args.base_url)
@@ -90,7 +125,7 @@ def main():
     security.logout()
 
     system = Client(args.base_url)
-    login = system.login("sysadmin", "System!Admin2026")
+    login = system.login("sysadmin", "System!Admin2026-Changed")
     assert "sessions" in login["pages"] and "service" in login["pages"] and "keys" not in login["pages"]
     assert system.call("/api/status")["daemon"]["status"] == "running"
     service = system.call("/api/service")
@@ -101,7 +136,7 @@ def main():
     assert system.call("/api/service")["running"] is False
     system.call("/api/status", expected=503)
     health = system.call("/api/health")
-    assert health["status"] == "ok" and health["version"] == "1.1.3"
+    assert health["status"] == "ok" and health["version"] == "1.1.4"
     assert health["daemon"]["running"] is False
     system.call("/api/service/start", "POST", {"confirmation": "START SERVICE"})
     assert system.call("/api/service")["daemon_available"] is True

@@ -9,6 +9,8 @@ import json
 import urllib.error
 import urllib.request
 
+from web_password import password_hash, password_material
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -40,12 +42,18 @@ def main() -> None:
     assert health["status"] == "ok"
     assert health["initialized"] is False
 
+    initial_password = password_material(
+        "Admin!Pass2026",
+        call(
+            "/api/auth/initialize-password-salt", "POST", {"username": "admin"}
+        ),
+    )
     call(
         "/api/initialize",
         "POST",
         {
             "username": "admin",
-            "password": "Admin!Pass2026",
+            "password": initial_password,
             "vendor": "CryptoKit",
             "device_name": "SoftHSM-0018",
             "serial": "E2E000001",
@@ -57,16 +65,18 @@ def main() -> None:
         },
         expected=201,
     )
+    account_salt = call("/api/auth/password-salt?username=admin")["salt_base64"]
+    admin_password = password_hash("Admin!Pass2026", account_salt)
     call(
         "/api/auth/login",
         "POST",
-        {"username": "admin", "password": "incorrect"},
+        {"username": "admin", "password": password_hash("incorrect", account_salt)},
         expected=401,
     )
     login = call(
         "/api/auth/login",
         "POST",
-        {"username": "admin", "password": "Admin!Pass2026"},
+        {"username": "admin", "password": admin_password},
     )
     csrf = login["csrf"]
     session = call("/api/auth/session")
@@ -91,7 +101,7 @@ def main() -> None:
     call("/api/keks", "POST", {"index": 2}, csrf, expected=201)
     call(
         "/api/keks/2", "DELETE",
-        {"password": "Admin!Pass2026", "confirmation": "DELETE"}, csrf,
+        {"password": admin_password, "confirmation": "DELETE"}, csrf,
     )
     backup = call("/api/backups", "POST", {}, csrf, expected=201)
     backup_id = backup["id"]
@@ -127,7 +137,7 @@ def main() -> None:
     call(
         "/api/keys/sign/2",
         "DELETE",
-        {"password": "Admin!Pass2026", "confirmation": "DELETE"},
+        {"password": admin_password, "confirmation": "DELETE"},
         csrf,
     )
     call(
@@ -143,18 +153,18 @@ def main() -> None:
     call("/api/keys/enc/1/disable", "POST", {}, expected=403)
     call(
         "/api/backups/restore", "POST",
-        {"backup_id": backup_id, "password": "Admin!Pass2026", "confirmation": "RESTORE"},
+        {"backup_id": backup_id, "password": admin_password, "confirmation": "RESTORE"},
         csrf,
     )
     call("/api/auth/session", expected=401)
     login = call(
         "/api/auth/login", "POST",
-        {"username": "admin", "password": "Admin!Pass2026"},
+        {"username": "admin", "password": admin_password},
     )
     csrf = login["csrf"]
     call(
         f"/api/backups/{backup_id}", "DELETE",
-        {"password": "Admin!Pass2026", "confirmation": "DELETE"}, csrf,
+        {"password": admin_password, "confirmation": "DELETE"}, csrf,
     )
     health = call("/api/health")
     assert health["initialized"] is True

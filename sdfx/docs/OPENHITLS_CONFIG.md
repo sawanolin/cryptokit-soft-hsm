@@ -162,7 +162,7 @@ After running cmake, check the configuration output:
 --   Libraries: /path/to/openhitls/lib/libhitls_crypto.so;/path/to/openhitls/lib/libhitls_bsl.so;...
 
 -- SDFX Configuration:
---   Version: 1.1.3
+--   Version: 1.1.4
 --   Build type: Release
 --   C Compiler: /usr/bin/cc
 --   Install prefix: /usr/local

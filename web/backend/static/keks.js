@@ -125,11 +125,14 @@ $("#kek-delete-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   const data = formJson(form);
+  const password = data.password;
+  form.password.value = "";
   try {
+    const passwordHash = await currentPasswordHash(password);
     await api(`/api/keks/${data.index}`, {
       method: "DELETE",
       body: JSON.stringify({
-        password: data.password,
+        password: passwordHash,
         confirmation: data.confirmation,
       }),
     });

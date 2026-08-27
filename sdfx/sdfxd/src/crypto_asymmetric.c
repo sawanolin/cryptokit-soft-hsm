@@ -473,14 +473,11 @@ int crypto_sm2_external_sign(const ECCrefPrivateKey *private_key,
     if (ctx == NULL) {
         return SDR_KEYERR;
     }
-    uint8_t user_id[32] = {0};
-    if (CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_SM2_USER_ID, user_id, sizeof(user_id)) != CRYPT_SUCCESS) {
-        CRYPT_EAL_PkeyFreeCtx(ctx);
-        return SDR_KEYERR;
-    }
     uint8_t der[80];
     uint32_t der_len = sizeof(der);
-    int hitls_ret = CRYPT_EAL_PkeySign(ctx, CRYPT_MD_SM3, data, data_len, der, &der_len);
+    /* GM/T 0018 external SM2 sign receives the already prepared 32-byte e.
+     * Do not hash it again: this must interoperate with SKF_ECCSignData. */
+    int hitls_ret = CRYPT_EAL_PkeySignData(ctx, data, data_len, der, &der_len);
     CRYPT_EAL_PkeyFreeCtx(ctx);
     if (hitls_ret != CRYPT_SUCCESS) {
         return SDR_KEYERR;
@@ -528,11 +525,6 @@ int crypto_sm2_external_verify(const ECCrefPublicKey *public_key,
     if (ctx == NULL) {
         return SDR_KEYERR;
     }
-    uint8_t user_id[32] = {0};
-    if (CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_SM2_USER_ID, user_id, sizeof(user_id)) != CRYPT_SUCCESS) {
-        CRYPT_EAL_PkeyFreeCtx(ctx);
-        return SDR_KEYERR;
-    }
     uint8_t content[72];
     uint8_t *content_cursor = content;
     const uint8_t *content_end = content + sizeof(content);
@@ -549,8 +541,9 @@ int crypto_sm2_external_verify(const ECCrefPublicKey *public_key,
         CRYPT_EAL_PkeyFreeCtx(ctx);
         return SDR_KEYERR;
     }
-    int hitls_ret = CRYPT_EAL_PkeyVerify(ctx, CRYPT_MD_SM3, data, data_len,
-                                         der, (uint32_t)(der_cursor - der));
+    /* data is the caller-supplied 32-byte digest e, not the original message. */
+    int hitls_ret = CRYPT_EAL_PkeyVerifyData(ctx, data, data_len,
+                                             der, (uint32_t)(der_cursor - der));
     CRYPT_EAL_PkeyFreeCtx(ctx);
     return hitls_ret == CRYPT_SUCCESS ? SDR_OK : SDR_VERIFYERR;
 }

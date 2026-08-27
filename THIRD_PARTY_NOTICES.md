@@ -75,6 +75,25 @@ openHiTLS includes test certificates and private-key fixtures in its upstream
 test data. They are public test material, not CryptoKit SoftHSM production
 credentials. Their original notices and directory structure must be preserved.
 
+### Python cryptography and transitive packages
+
+The Web management service installs the following Python packages at image
+build time for X.509 certificate parsing and validation:
+
+- `cryptography` 46.0.3 — Apache License 2.0 or BSD 3-Clause License;
+- `cffi` — MIT License;
+- `pycparser` — BSD 3-Clause License.
+
+Project pages and complete license texts are distributed with the installed
+Python package metadata and are available from:
+
+- <https://github.com/pyca/cryptography>;
+- <https://github.com/python-cffi/cffi>;
+- <https://github.com/eliben/pycparser>.
+
+These packages remain under their own licenses. Their inclusion does not make
+them subject to the project's AGPL license.
+
 ## License and source-availability obligations
 
 CryptoKit SoftHSM original work is distributed under `AGPL-3.0-only`. Source and object-code
@@ -95,6 +114,8 @@ This repository satisfies that structure by keeping:
 - `sdfx/LICENSE` and existing SDFX source headers;
 - `openhitls/LICENSE`;
 - `openhitls/Third_Party_Open_Source_Software_Notice`;
+- the installed Python package license metadata for `cryptography`, `cffi`,
+  and `pycparser`;
 - other copyright and attribution notices already present in bundled source.
 
 Do not remove these files when creating source archives, GitHub Releases,

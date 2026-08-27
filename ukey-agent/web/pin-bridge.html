@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'">
+  <title>UKey 身份验证</title>
+  <style>
+    :root { color-scheme: light; font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; color: #142235; background: #e7eef3; }
+    * { box-sizing: border-box; }
+    body { min-width: 320px; min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 14px; background: linear-gradient(145deg,#edf3f7,#dfe9f1); }
+    main { width: 100%; padding: 20px; background: rgba(255,255,255,.96); border: 1px solid #d7e0e8; border-radius: 13px; box-shadow: 0 16px 44px rgba(20,34,53,.15); }
+    header { display: flex; align-items: center; gap: 11px; margin-bottom: 16px; }
+    .mark { width: 36px; height: 36px; display: grid; place-items: center; color: #fff; font-weight: 900; background: linear-gradient(135deg,#3478f6,#6b9cff); border-radius: 10px 4px 10px 4px; }
+    h1 { margin: 0; font-size: 19px; }
+    .context { margin: 0 0 15px; color: #566779; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+    label { display: grid; gap: 7px; color: #344054; font-size: 13px; font-weight: 650; }
+    input { width: 100%; padding: 10px 12px; color: #142235; background: #fff; border: 1px solid #cbd5df; border-radius: 8px; outline: none; font: inherit; }
+    input:focus { border-color: #3478f6; box-shadow: 0 0 0 3px rgba(52,120,246,.13); }
+    .status { min-height: 20px; margin: 10px 0 0; color: #566779; font-size: 12px; line-height: 1.5; }
+    .status.error { color: #b42318; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 15px; }
+    button { padding: 9px 15px; border: 1px solid #cbd5df; border-radius: 8px; background: #fff; color: #344054; font: inherit; font-weight: 700; cursor: pointer; }
+    button.primary { color: #fff; background: #3478f6; border-color: #3478f6; }
+    button:disabled { cursor: not-allowed; opacity: .5; }
+  </style>
+</head>
+<body>
+  <main>
+    <header><span class="mark" aria-hidden="true">CK</span><h1>UKey 身份验证</h1></header>
+    <p id="context" class="context">正在接收软件服务器密码机的登录挑战…</p>
+    <form id="pin-form">
+      <label>UKey PIN<input id="pin" type="password" maxlength="64" required autocomplete="off" disabled autofocus></label>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <div class="actions"><button id="cancel" type="button">取消</button><button id="confirm" class="primary" type="submit" disabled>确认签名</button></div>
+    </form>
+  </main>
+  <script>
+    "use strict";
+    const sourceName = "cryptokit-ukey-bridge";
+    const openerWindow = window.opener;
+    const form = document.getElementById("pin-form");
+    const pinInput = document.getElementById("pin");
+    const confirmButton = document.getElementById("confirm");
+    const context = document.getElementById("context");
+    const status = document.getElementById("status");
+    let request = null;
+    let parentOrigin = "*";
+    let busy = false;
+
+    function post(type, extra = {}) {
+      if (openerWindow && !openerWindow.closed) {
+        openerWindow.postMessage({ source: sourceName, type, ...extra }, parentOrigin);
+      }
+    }
+
+    function setStatus(message, error = false) {
+      status.textContent = message;
+      status.classList.toggle("error", error);
+    }
+
+    const readyTimer = window.setInterval(() => post("ready"), 300);
+    post("ready");
+
+    window.addEventListener("message", (event) => {
+      const data = event.data;
+      if (event.source !== openerWindow || !data || data.source !== "cryptokit-soft-hsm" || data.type !== "sign" || request) return;
+      parentOrigin = event.origin;
+      request = data;
+      window.clearInterval(readyTimer);
+      context.textContent = `${data.username || "管理员"} 正在登录 ${event.origin}。请输入 UKey PIN 完成签名。`;
+      pinInput.disabled = false;
+      confirmButton.disabled = false;
+      pinInput.focus();
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!request || busy) return;
+      busy = true;
+      pinInput.disabled = true;
+      confirmButton.disabled = true;
+      setStatus("正在调用 UKey 签名…");
+      const body = {
+        challenge_base64url: request.challenge_base64url,
+        pin: pinInput.value,
+        user_id: request.user_id,
+        request_id: request.channel_id,
+      };
+      try {
+        const response = await fetch("/v1/sign", {
+          method: "POST",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `UKey 签名失败（${response.status}）`);
+        post("result", { channel_id: request.channel_id, result });
+        setStatus("签名成功，正在返回登录页面…");
+        window.setTimeout(() => window.close(), 180);
+      } catch (error) {
+        setStatus(error.message || "UKey 签名失败", true);
+        pinInput.disabled = false;
+        confirmButton.disabled = false;
+        pinInput.focus();
+        post("sign-error", { channel_id: request.channel_id, error: error.message || "UKey 签名失败" });
+      } finally {
+        body.pin = "";
+        pinInput.value = "";
+        busy = false;
+      }
+    });
+
+    document.getElementById("cancel").addEventListener("click", () => {
+      post("cancel", { channel_id: request?.channel_id || "" });
+      pinInput.value = "";
+      window.close();
+    });
+
+    window.addEventListener("beforeunload", () => {
+      window.clearInterval(readyTimer);
+      pinInput.value = "";
+    });
+  </script>
+</body>
+</html>

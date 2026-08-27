@@ -57,12 +57,15 @@ $("#session-form").addEventListener("submit", async (event) => {
 
   const form = event.currentTarget;
   const data = formJson(form);
+  const password = data.password;
+  form.password.value = "";
 
   try {
+    const passwordHash = await currentPasswordHash(password);
     await api(`/api/sessions/${data.session_id}`, {
       method: "DELETE",
       body: JSON.stringify({
-        password: data.password,
+        password: passwordHash,
         confirmation: data.confirmation,
       }),
     });

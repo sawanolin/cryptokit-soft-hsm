@@ -7,12 +7,18 @@ import argparse
 import http.cookiejar
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
+
+from web_password import password_hash
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://127.0.0.1:18080")
+    parser.add_argument("--username", default="rootadmin")
+    parser.add_argument("--password", default="Root!Admin2026")
+    parser.add_argument("--serial", default="RBAC000001")
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
     jar = http.cookiejar.CookieJar()
@@ -40,17 +46,21 @@ def main() -> None:
         assert status == expected, (path, status, payload)
         return payload
 
+    account_salt = call(
+        f"/api/auth/password-salt?username={urllib.parse.quote(args.username)}"
+    )["salt_base64"]
+    admin_password = password_hash(args.password, account_salt)
     login = call(
         "/api/auth/login",
         "POST",
-        {"username": "admin", "password": "Admin!Pass2026"},
+        {"username": args.username, "password": admin_password},
     )
     csrf = login["csrf"]
     call(
         "/api/device/reset",
         "POST",
         {
-            "password": "Admin!Pass2026",
+            "password": admin_password,
             "serial": "WRONG",
             "confirmation": "RESET DEVICE",
         },
@@ -61,8 +71,8 @@ def main() -> None:
         "/api/device/reset",
         "POST",
         {
-            "password": "Admin!Pass2026",
-            "serial": "E2E000001",
+            "password": admin_password,
+            "serial": args.serial,
             "confirmation": "RESET DEVICE",
         },
         csrf,
@@ -73,7 +83,7 @@ def main() -> None:
     call(
         "/api/auth/login",
         "POST",
-        {"username": "admin", "password": "Admin!Pass2026"},
+        {"username": args.username, "password": admin_password},
         expected=409,
     )
     print(json.dumps({"result": "passed", "reset": "complete"}))

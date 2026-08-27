@@ -10,6 +10,8 @@ import socket
 import struct
 import urllib.request
 
+from web_password import password_hash
+
 
 MAGIC = 0x53444658
 VERSION = 0x00020000
@@ -64,17 +66,19 @@ def main() -> None:
         with opener.open(request, timeout=10) as response:
             return json.loads(response.read())
 
+    account_salt = call("/api/auth/password-salt?username=admin")["salt_base64"]
+    admin_password = password_hash("Admin!Pass2026", account_salt)
     login = call(
         "/api/auth/login",
         "POST",
-        {"username": "admin", "password": "Admin!Pass2026"},
+        {"username": "admin", "password": admin_password},
     )
     sessions = call("/api/sessions")
     assert any(item["session_id"] == session_id for item in sessions)
     call(
         f"/api/sessions/{session_id}",
         "DELETE",
-        {"password": "Admin!Pass2026", "confirmation": "TERMINATE"},
+        {"password": admin_password, "confirmation": "TERMINATE"},
         login["csrf"],
     )
     assert not any(

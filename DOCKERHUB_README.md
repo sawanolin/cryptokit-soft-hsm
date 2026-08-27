@@ -20,7 +20,7 @@ CryptoKit SoftHSM 是一套基于 SDFX 和 openHiTLS 的软件密码设备模拟
 镜像仓库为 `sawanolin/cryptokit-soft-hsm`：
 
 ```bash
-docker pull sawanolin/cryptokit-soft-hsm:1.1.3
+docker pull sawanolin/cryptokit-soft-hsm:1.1.4
 
 docker run -d \
   --name cryptokit-soft-hsm \
@@ -29,7 +29,7 @@ docker run -d \
   -v cryptokit-sdfx-data:/var/lib/sdfx \
   --restart unless-stopped \
   --security-opt no-new-privileges:true \
-  sawanolin/cryptokit-soft-hsm:1.1.3
+  sawanolin/cryptokit-soft-hsm:1.1.4
 ```
 
 打开：
@@ -38,14 +38,14 @@ docker run -d \
 http://ip:18080
 ```
 
-首次进入只创建超级管理员、设备信息和设备完整性密钥，不生成业务密钥。超级管理员再创建系统、安全、审计管理员，业务密钥由安全管理员配置。镜像没有默认管理员密码。
+首次进入只创建超级管理员、设备信息和设备完整性密钥，不生成业务密钥。超级管理员再创建系统、安全、审计管理员，业务密钥由安全管理员配置。镜像没有默认管理员密码。每个账户首次创建时由 SDF 接口生成一次固定 8 字节随机盐值，修改口令和后续登录均复用该盐值；浏览器提交 `SM3(UTF8(口令) || 盐值)`，服务端只保存盐值和哈希。
 
 ## Docker Compose
 
 ```yaml
 services:
   softhsm:
-    image: sawanolin/cryptokit-soft-hsm:1.1.3
+    image: sawanolin/cryptokit-soft-hsm:1.1.4
     ports:
       - "0.0.0.0:18081:18081"
       - "0.0.0.0:18080:18080"
@@ -72,7 +72,7 @@ docker compose ps
 
 | 标签     | 含义                           |
 | -------- | ------------------------------ |
-| `1.1.3`  | 固定版本，部署时推荐           |
+| `1.1.4`  | 固定版本，部署时推荐           |
 | `latest` | 最新稳定版本，可能随新版本移动 |
 
 当前已经实际构建和验证的平台为：
@@ -107,12 +107,13 @@ linux/amd64
 - 附录 C IKE、IPSEC、SSL 普通和 EPK 包装接口；
 - SDF 用户文件；
 - Web 四角色权限、设备、SM2/RSA/对称密钥、会话和审计管理；
+- Web 支持为管理员绑定 SM2 用户签名证书与 CA 信任锚，通过 Windows UKey Agent 完成一次性挑战响应登录，并可按账户选择“用户名+口令”或“用户名+口令+UKey”；
 - Web 服务管理展示地址、端口、启动时间、运行时长和请求数，系统管理员可真正启停或重启容器内 `sdfxd`；
 - Web 随机数、SM3、SM4、SM2、RSA 在线自检；
 - 审计日志支持时间段、级别、类型、结果、管理员、操作、来源、请求号、路径和关键字组合筛选，可按字段导出 TXT、CSV 或 JSONL；SDF 调用失败记录为 `ERROR / sdf`；
 - 备份、恢复、上传、下载和完全重置。
 
-1.1.3 的公开算法标识按 GM/T 0006-2023 对齐：SM2 签名、密钥交换、加密
+1.1.4 的公开算法标识按 GM/T 0006-2023 对齐：SM2 签名、密钥交换、加密
 分别为 `0x00020200`、`0x00020400`、`0x00020800`，SM4-XTS 为
 `0x01000400`。SHA-1/224/384/512 教学扩展使用 `SDFX_*` 自定义标识，
 不再占用非标准的 `2/3/5/6`。
@@ -126,6 +127,14 @@ linux/amd64
 - 系统管理员：设备、会话、服务进程和备份恢复；启停密码服务不会停止 Web 或删除数据卷；
 - 安全管理员：密码自检及 SM2/RSA/对称密钥；
 - 审计管理员：日志配置、查询和 TXT 导出。
+
+UKey 登录所需的 Windows 单文件 Agent 不运行在 Linux 容器中，可从登录页或
+对应版本的 GitHub Release 下载到登录电脑。Agent 固定监听 `127.0.0.1:18088`，
+可加载 32 位或 64 位厂商 SKF DLL。管理页先校验用户名和服务器口令，再打开
+Agent 提供的小型本地浏览器窗口输入 PIN。PIN 不进入管理页或 Docker 服务端；
+服务端只接收一次性挑战签名和签名证书，并完成证书链、有效期、用途、指纹和
+SM2 验签。未检测到 Agent 时，页面会提示启动、重新检测或下载插件。不要把
+Agent 改为监听 `0.0.0.0`。
 
 SM2/RSA 签名与加密密钥索引独立，可以在 Web 中修改。私钥访问控制码可以留空；留空表示应用调用时不要求口令，不表示私钥明文保存。所有持久化非对称密钥及 SM4 对称密钥记录连同索引均使用 HMAC-SM3 完整性保护，并提供显式校验；HMAC 密钥来自首次初始化自动生成且不可通过 Web 修改或导出的设备完整性密钥。旧版 16 字节对称密钥文件会在首次读取时自动迁移为受保护记录。
 
@@ -154,7 +163,7 @@ healthy
 
 ## 数据管理
 
-命名卷会保留管理员账号和密码摘要。重建容器时重新挂载同一个卷会继续使用上次账号；需要全新初始化时必须改用新的空卷。
+命名卷会保留管理员账号、固定 8 字节盐值和 SM3 哈希。重建容器时重新挂载同一个卷会继续使用上次账号。仅需重新创建 Web 账号时，可备份并删除容器内 `/var/lib/sdfx/web/state.json` 后重启；需要连同全部密码机数据一起创建全新设备时才应改用新的空卷。
 
 停止或更新容器不会删除命名卷：
 
@@ -179,7 +188,7 @@ docker volume rm cryptokit-sdfx-data
 建议固定版本标签，并在更新前备份：
 
 ```bash
-docker pull sawanolin/cryptokit-soft-hsm:1.1.3
+docker pull sawanolin/cryptokit-soft-hsm:1.1.4
 docker stop cryptokit-soft-hsm
 docker rm cryptokit-soft-hsm
 ```

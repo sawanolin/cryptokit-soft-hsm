@@ -6,3 +6,4 @@
 **/.git/
 **/build/
 **/.pytest_cache/
+ukey-agent/dist/

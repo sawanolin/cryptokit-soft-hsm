@@ -1,0 +1,7 @@
+#include "src/resources.hpp"
+
+IDR_HELPER_X86 RCDATA "build\\payload\\ukey-helper-x86.exe"
+IDR_HELPER_X64 RCDATA "build\\payload\\ukey-helper-x64.exe"
+IDR_WEB_JS     RCDATA "web\\ukey-agent.js"
+IDR_LOGO_PNG   RCDATA "logo.png"
+IDR_PIN_BRIDGE_HTML RCDATA "web\\pin-bridge.html"

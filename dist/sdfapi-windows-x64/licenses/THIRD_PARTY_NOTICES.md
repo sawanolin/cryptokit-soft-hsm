@@ -12,7 +12,7 @@ for CryptoKit SoftHSM. It does not claim ownership of SDFX, openHiTLS, the
 GM/T 0018-2023 standard, or other third-party material.
 
 CryptoKit SoftHSM original additions and modifications are licensed under the
-[GNU Affero General Public License, Version 3 only](CryptoKit-SoftHSM-AGPL-3.0-only.txt)
+[GNU Affero General Public License, Version 3 only](LICENSE)
 (`AGPL-3.0-only`). The corresponding source repository is
 <https://github.com/sawanolin/cryptokit-soft-hsm>.
 
@@ -28,7 +28,7 @@ copyright, license, patent, trademark, or disclaimer notices.
 - Upstream: <https://gitcode.com/openHiTLS/sdfx>
 - License: Mulan PSL v2
 - Bundled source: `sdfx/`
-- Bundled license: [`SDFX-MulanPSL-2.0.txt`](SDFX-MulanPSL-2.0.txt)
+- Bundled license: [`sdfx/LICENSE`](sdfx/LICENSE)
 - Existing source notices: `Copyright (C) 2025 SDFX Project`
 
 The bundled SDFX snapshot has been modified for CryptoKit SoftHSM. Material
@@ -57,9 +57,9 @@ and record the matching commit or source archive digest in this document.
 - Website: <https://openhitls.net>
 - License: Mulan PSL v2
 - Bundled source: `openhitls/`
-- Bundled license: [`openHiTLS-MulanPSL-2.0.txt`](openHiTLS-MulanPSL-2.0.txt)
+- Bundled license: [`openhitls/LICENSE`](openhitls/LICENSE)
 - Bundled third-party notice:
-  [`openHiTLS-THIRD-PARTY-NOTICE`](openHiTLS-THIRD-PARTY-NOTICE)
+  [`openhitls/Third_Party_Open_Source_Software_Notice`](openhitls/Third_Party_Open_Source_Software_Notice)
 
 The bundled header `openhitls/include/bsl/bsl_version.h` identifies the runtime
 source as `openHiTLS 0.4.0 31 Mar. 2026`. The bundled release document still
@@ -75,6 +75,25 @@ openHiTLS includes test certificates and private-key fixtures in its upstream
 test data. They are public test material, not CryptoKit SoftHSM production
 credentials. Their original notices and directory structure must be preserved.
 
+### Python cryptography and transitive packages
+
+The Web management service installs the following Python packages at image
+build time for X.509 certificate parsing and validation:
+
+- `cryptography` 46.0.3 — Apache License 2.0 or BSD 3-Clause License;
+- `cffi` — MIT License;
+- `pycparser` — BSD 3-Clause License.
+
+Project pages and complete license texts are distributed with the installed
+Python package metadata and are available from:
+
+- <https://github.com/pyca/cryptography>;
+- <https://github.com/python-cffi/cffi>;
+- <https://github.com/eliben/pycparser>.
+
+These packages remain under their own licenses. Their inclusion does not make
+them subject to the project's AGPL license.
+
 ## License and source-availability obligations
 
 CryptoKit SoftHSM original work is distributed under `AGPL-3.0-only`. Source and object-code
@@ -89,12 +108,14 @@ retained, and recipients must receive the applicable upstream license copies.
 
 This repository satisfies that structure by keeping:
 
-- `CryptoKit-SoftHSM-AGPL-3.0-only.txt`;
+- `LICENSE`;
 - `NOTICE`;
 - this `THIRD_PARTY_NOTICES.md`;
-- `SDFX-MulanPSL-2.0.txt` and existing SDFX source headers;
-- `openHiTLS-MulanPSL-2.0.txt`;
-- `openHiTLS-THIRD-PARTY-NOTICE`;
+- `sdfx/LICENSE` and existing SDFX source headers;
+- `openhitls/LICENSE`;
+- `openhitls/Third_Party_Open_Source_Software_Notice`;
+- the installed Python package license metadata for `cryptography`, `cffi`,
+  and `pycparser`;
 - other copyright and attribution notices already present in bundled source.
 
 Do not remove these files when creating source archives, GitHub Releases,

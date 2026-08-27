@@ -107,7 +107,10 @@ $("#backup-restore-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   const data = formJson(form);
+  const password = data.password;
+  form.password.value = "";
   try {
+    data.password = await currentPasswordHash(password);
     await api("/api/backups/restore", {
       method: "POST",
       body: JSON.stringify(data),
@@ -115,6 +118,7 @@ $("#backup-restore-form").addEventListener("submit", async (event) => {
     $("#backup-restore-dialog").close();
     form.reset();
     state.csrf = null;
+    state.username = null;
     showMode("login");
     notice("备份恢复完成，请使用恢复后的管理员凭据重新登录");
   } catch (error) {
@@ -126,11 +130,14 @@ $("#backup-delete-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   const data = formJson(form);
+  const password = data.password;
+  form.password.value = "";
   try {
+    const passwordHash = await currentPasswordHash(password);
     await api(`/api/backups/${data.backup_id}`, {
       method: "DELETE",
       body: JSON.stringify({
-        password: data.password,
+        password: passwordHash,
         confirmation: data.confirmation,
       }),
     });
@@ -148,14 +155,19 @@ $("#open-reset-dialog").addEventListener("click", () => $("#reset-dialog").showM
 $("#reset-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
+  const data = formJson(form);
+  const password = data.password;
+  form.password.value = "";
   try {
+    data.password = await currentPasswordHash(password);
     await api("/api/device/reset", {
       method: "POST",
-      body: JSON.stringify(formJson(form)),
+      body: JSON.stringify(data),
     });
     $("#reset-dialog").close();
     form.reset();
     state.csrf = null;
+    state.username = null;
     showMode("initialize");
     notice("设备已经完全重置，需要重新初始化");
   } catch (error) {

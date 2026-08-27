@@ -1,4 +1,4 @@
-﻿#ifndef __SDF_TYPES_H__
+#ifndef __SDF_TYPES_H__
 #define __SDF_TYPES_H__
 #include <stdint.h>
 #include <stddef.h>
@@ -119,7 +119,7 @@ typedef struct DeviceInfo_st
 #define SDFX_SHA512_224             0x00000024   /* identifier reserved; implementation unavailable */
 #define SDFX_SHA512_256             0x00000025   /* identifier reserved; implementation unavailable */
 
-/* Deprecated source-compatibility aliases for pre-1.1.3 teaching programs. */
+/* Deprecated source-compatibility aliases for pre-1.1.4 teaching programs. */
 #define SGD_SHA1                    SDFX_SHA1
 #define SGD_SHA224                  SDFX_SHA224
 #define SGD_SHA384                  SDFX_SHA384
