@@ -1,6 +1,5 @@
 # CryptoKit SoftHSM
 
-Docker Hub 短描述（可直接粘贴，少于 100 字符）：
 
 > GM/T 0018-2023 SDF 软件密码设备模拟器，内置 Web 管理与 Windows x64 SDK
 
